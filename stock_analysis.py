@@ -14,6 +14,7 @@ import time
 from PyQt5.QtWidgets import QMainWindow, QApplication, QShortcut
 from PyQt5.QtCore import *
 from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 
@@ -522,7 +523,8 @@ class MainWindow(QMainWindow):
                 options = webdriver.ChromeOptions()
                 options.add_argument("headless")
                 options.add_experimental_option("excludeSwitches", ["enable-logging"])
-                service = Service("chromedriver")
+                # service = Service("chromedriver")
+                service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.webEngineView.load(QUrl(stock_url))
 
