@@ -2,7 +2,8 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import requests, lxml
-import pymysql, calendar
+import pymysql
+import calendar
 from threading import Timer
 from pandas_datareader import data as pdr
 import yfinance as yf
@@ -348,7 +349,7 @@ class DBUpdater:
 
                 # pdr 활용
                 com = pdr.get_data_yahoo(code, (datetime.today() - timedelta(days=6)), datetime.today())
-                com['date'] = com.index
+                com['date'] = com.index.strftime('%Y-%m-%d')
                 com = com.reset_index(drop=True)
                 com['code'] = code
                 df = com[['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']]
@@ -360,7 +361,7 @@ class DBUpdater:
 
             elif period == 2:
                 com = pdr.get_data_yahoo(code, '2021-01-01', datetime.today())
-                com['date'] = com.index
+                com['date'] = com.index.strftime('%Y-%m-%d')
                 com = com.reset_index(drop=True)
                 com['code'] = code
                 df = com[['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']]

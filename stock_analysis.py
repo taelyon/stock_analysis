@@ -17,6 +17,7 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
+import logging
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -261,7 +262,9 @@ class MainWindow(QMainWindow):
                         df.RSI.values[-1] < 30
                         and df.macdhist.values[-1] > df.macdhist.values[-2]
                         and df.macd.values[-1] > df.macd.values[-2]
-                    ):
+                        and df.close.values[-1] > df.open.values[-1]
+                    ) or (df.close.values[-1] < df.ENBOTTOM.values[-1]
+                    and df.close.values[-1] > df.open.values[-1]):
                         self.lb_search.addItem(company)
                         self.write_to_search_file(company)
                 except Exception as e:
@@ -363,18 +366,19 @@ class MainWindow(QMainWindow):
 
             plt.rc("font", family="Malgun Gothic")
             plt.rcParams["axes.unicode_minus"] = False
+            plt.clf()
 
             p1 = plt.subplot2grid((9, 4), (0, 0), rowspan=4, colspan=4)
             p1.grid()
             day = str(df.date.values[-1])
-            title = (company + " (" + day + " : " + str(df.close.values[-1]) + ")" + "\n"
-                     + " 수익률: " + "(20일 " + str(df.RET20.values[-1]) + "%) "
-                     + "(5일 " + str(df.RET5.values[-1]) + "%) "
-                     + "(1일 " + str(df.RET1.values[-1]) + "%)"
-                     + " / 이동평균: " + "(EMA5 " + str(round(df.ema5.values[-1], 1)) + ") "
-                     + "(EMA10 " + str(round(df.ema10.values[-1], 1)) + ") "
-                     + "(EMA20 " + str(round(df.ema20.values[-1], 1)) + ") "
-                     )
+            title = (company+" ("+day+ " : "+ str(df.close.values[-1])+ ")"+"\n"
+                + " 수익률: "+ "(20일 "+ str(df.RET20.values[-1])+ "%) "
+                + "(5일 "+ str(df.RET5.values[-1])+ "%) "
+                + "(1일 "+ str(df.RET1.values[-1])+ "%)"
+                + " / 이동평균: "+"(EMA5 " + str(round(df.ema5.values[-1],1))+") "
+                + "(EMA10 " + str(round(df.ema10.values[-1],1))+") "
+                + "(EMA20 " + str(round(df.ema20.values[-1],1))+") "
+            )
             p1.set_title(title)
             # p1.plot(df.index, df['upper'], 'r--')
             # p1.plot(df.index, df['lower'], 'c--')
@@ -538,6 +542,7 @@ class MainWindow(QMainWindow):
     def _append_text(self, msg):
         self.log_widget.moveCursor(QtGui.QTextCursor.End)
         self.log_widget.insertPlainText(msg)
+        QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
 
 
     # 프로그램 UI
@@ -873,23 +878,34 @@ class MainWindow(QMainWindow):
 class StdoutRedirect(QObject):
     printOccur = pyqtSignal(str, str, name="print")
 
-    def __init__(self, *param):
-        QObject.__init__(self, None)
-        self.daemon = True
-        self.sysstdout = sys.stdout.write
-        self.sysstderr = sys.stderr.write
+    def __init__(self):
+        super().__init__()
+        # sys.stdout과 sys.stderr를 대체하기 전의 원래 메서드를 저장합니다.
+        self.original_stdout_write = sys.stdout.write
+        self.original_stderr_write = sys.stderr.write
 
     def stop(self):
-        sys.stdout.write = self.sysstdout
-        sys.stderr.write = self.sysstderr
+        # stdout과 stderr를 원래의 메서드로 복원합니다.
+        sys.stdout.write = self.original_stdout_write
+        sys.stderr.write = self.original_stderr_write
 
     def start(self):
-        sys.stdout.write = self.write
-        sys.stderr.write = lambda msg: self.write(msg, color="red")
+        # stdout과 stderr를 새로운 메서드로 대체합니다.
+        sys.stdout.write = self.write_stdout
+        sys.stderr.write = self.write_stderr
 
-    def write(self, s, color="black"):
-        sys.stdout.flush()
-        self.printOccur.emit(s, color)
+    def write_stdout(self, message):
+        # 표준 출력을 위한 커스텀 write 메서드입니다.
+        self.write(message, color="black")
+
+    def write_stderr(self, message):
+        # 표준 에러를 위한 커스텀 write 메서드입니다.
+        self.write(message, color="red")
+
+    def write(self, message, color):
+        # 실제 메시지를 처리하고, GUI 컴포넌트로 전달하기 위해 신호를 발생시킵니다.
+        sys.stdout.flush()  # stdout 버퍼를 강제로 비웁니다.
+        self.printOccur.emit(message, color)
 
 
 if __name__ == "__main__":
