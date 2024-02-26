@@ -880,33 +880,28 @@ class StdoutRedirect(QObject):
 
     def __init__(self):
         super().__init__()
-        # sys.stdout과 sys.stderr를 대체하기 전의 원래 메서드를 저장합니다.
-        self.original_stdout_write = sys.stdout.write
-        self.original_stderr_write = sys.stderr.write
+        # sys.stdout 및 sys.stderr의 원래 상태를 저장합니다.
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
 
     def stop(self):
-        # stdout과 stderr를 원래의 메서드로 복원합니다.
-        sys.stdout.write = self.original_stdout_write
-        sys.stderr.write = self.original_stderr_write
+        # stdout과 stderr를 원래의 객체로 복원합니다.
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
 
     def start(self):
-        # stdout과 stderr를 새로운 메서드로 대체합니다.
-        sys.stdout.write = self.write_stdout
-        sys.stderr.write = self.write_stderr
+        # stdout과 stderr를 이 객체의 메서드로 대체합니다.
+        sys.stdout = self
+        sys.stderr = self
 
-    def write_stdout(self, message):
-        # 표준 출력을 위한 커스텀 write 메서드입니다.
-        self.write(message, color="black")
+    def write(self, message):
+        # 색상을 구분하지 않고 모든 메시지를 기본 색상으로 처리합니다.
+        # 필요에 따라 여기서 메시지의 종류(표준 출력 또는 에러)에 따라 색상을 지정할 수 있습니다.
+        self.printOccur.emit(message, "black")
 
-    def write_stderr(self, message):
-        # 표준 에러를 위한 커스텀 write 메서드입니다.
-        self.write(message, color="red")
-
-    def write(self, message, color):
-        # 실제 메시지를 처리하고, GUI 컴포넌트로 전달하기 위해 신호를 발생시킵니다.
-        sys.stdout.flush()  # stdout 버퍼를 강제로 비웁니다.
-        self.printOccur.emit(message, color)
-
+    def flush(self):
+        # flush 메서드가 호출될 때 특별히 수행할 작업이 없는 경우, 이를 빈 메서드로 두어 호환성을 유지합니다.
+        pass
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
