@@ -133,9 +133,7 @@ class DBUpdater:
     def update_comp_info(self, nation):
         sql = "SELECT * FROM company_info"
         df = pd.read_sql(sql, self.conn)
-        for idx in range(len(df)):
-            self.codes[df['code'].values[idx]] = df['company'].values[idx]
-
+        
         with self.conn.cursor() as curs:
             sql = "SELECT last_update FROM company_info"
             curs.execute(sql)
@@ -143,56 +141,35 @@ class DBUpdater:
             today = datetime.today().strftime('%Y-%m-%d')
 
             if nation == 'kr':
-                if rs[0][0] is None or rs[0][0].strftime('%Y-%m-%d') < today:
+                if not rs or rs[0][0] is None or rs[0][0].strftime('%Y-%m-%d') < today:
                     krx = self.read_krx_code()
                     for idx in range(len(krx)):
                         code = krx.code.values[idx]
                         company = krx.company.values[idx]
                         sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
                         curs.execute(sql)
-                        self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
                         print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     self.conn.commit()
                     print('')
 
             elif nation == 'us':
-                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
+                if not rs or rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
                     spx = self.read_spx_code()
                     for idx in range(len(spx)):
                         code = spx.code.values[idx]
                         company = spx.company.values[idx]
                         sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
                         curs.execute(sql)
-                        self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
                         print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     self.conn.commit()
                     print('')
 
             elif nation == 'all':
-                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:  #DB 처음 실행시 오류(indexerrror) 나면 주석처리후 실행
-                    krx = self.read_krx_code()
-                    for idx in range(len(krx)):
-                        code = krx.code.values[idx]
-                        company = krx.company.values[idx]
-                        nation = 'kr'
-                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
-                        curs.execute(sql)
-                        self.codes[code] = company
-                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
-                    spx = self.read_spx_code()
-                    for idx in range(len(spx)):
-                        code = spx.code.values[idx]
-                        company = spx.company.values[idx]
-                        nation = 'us'
-                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
-                        curs.execute(sql)
-                        self.codes[code] = company
-                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
-                    self.conn.commit()
+                if not rs or rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
+                    self.update_comp_info('kr')
+                    self.update_comp_info('us')
                     print('')
 
     def read_naver(self, code, period):
@@ -382,40 +359,40 @@ class DBUpdater:
             print('[{}] #{:04d} {} ({}) : {} rows > REPLACE INTO daily_price [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
 
     def update_daily_price(self, nation):
+    # Initialize or clear self.codes
+        self.codes = dict()
+        
+        # Update self.codes based on the nation
+        if nation in ['kr', 'us', 'all']:        
+            sql = f"SELECT code, company FROM company_info WHERE country = '{nation}' OR '{nation}' = 'all'"
+            df = pd.read_sql(sql, self.conn)
+            for idx, row in df.iterrows():
+                self.codes[row['code']] = row['company']
+
+        # Continue with the existing logic to update daily prices using the updated self.codes
         global run
         run = True
         if nation == 'stop':
             run = False
-        if nation == 'kr':
-            for idx, code in enumerate(self.codes):
-                if run:
-                    if len(code) >= 6:
-                        df = self.read_naver(code, 1)
-                        # df = df.dropna()
-                        if df is None:
-                            continue
-                        self.replace_into_db(df, idx, code, self.codes[code])
 
-        elif nation == 'us':
-            for idx, code in enumerate(self.codes):
-                if run:
-                    if len(code) < 6:
-                        df = self.read_yfinance(code, 1)
-                        # df = df.dropna()
-                        if df is None:
-                            continue
-                        self.replace_into_db(df, idx, code, self.codes[code])
-        elif nation == 'all':
-            for idx, code in enumerate(self.codes):
-                if run:
+        for idx, code in enumerate(self.codes):
+            if run:
+                if nation == 'kr' and len(code) >= 6:
+                    df = self.read_naver(code, 1)
+                elif nation == 'us' and len(code) < 6:
+                    df = self.read_yfinance(code, 1)
+                elif nation == 'all':
                     if len(code) >= 6:
-                        df = self.read_naver(code, 1)   #최초 실행시 2로 수정하여 업데이트
-                    elif len(code) < 6:
-                        df = self.read_yfinance(code, 1) #최초 실행시 2로 수정하여 업데이트
-                    # df = df.dropna()
-                    if df is None:
-                        continue
-                    self.replace_into_db(df, idx, code, self.codes[code])
+                        df = self.read_naver(code, 1)  # For initial run, change to 2 to update
+                    else:
+                        df = self.read_yfinance(code, 1)  # For initial run, change to 2 to update
+                else:
+                    continue  # Skip if none of the conditions match
+
+                if df is None:
+                    continue  # Skip if no data fetched
+
+                self.replace_into_db(df, idx, code, self.codes[code])
 
     def execute_daily(self):
         # self.ric_code()
