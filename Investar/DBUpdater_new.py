@@ -131,46 +131,32 @@ class DBUpdater:
         # return spx
 
     def update_comp_info(self, nation):
-        sql = "SELECT * FROM company_info"
-        df = pd.read_sql(sql, self.conn)
+    # Check if connection is valid
+        if self.conn is None or not self.conn.open:
+            print("Database connection is not open.")
+            return
         
-        with self.conn.cursor() as curs:
-            sql = "SELECT last_update FROM company_info"
-            curs.execute(sql)
-            rs = curs.fetchall()
-            today = datetime.today().strftime('%Y-%m-%d')
+        # Get the last update date from the database
+        try:
+            with self.conn.cursor() as curs:
+                curs.execute("SELECT MAX(last_update) FROM company_info WHERE country = %s", (nation,))
+                last_update = curs.fetchone()[0]
+                today = datetime.today().date()
 
-            if nation == 'kr':
-                if not rs or rs[0][0] is None or rs[0][0].strftime('%Y-%m-%d') < today:
-                    krx = self.read_krx_code()
-                    for idx in range(len(krx)):
-                        code = krx.code.values[idx]
-                        company = krx.company.values[idx]
-                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
-                        curs.execute(sql)
-                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
-                    self.conn.commit()
-                    print('')
+                # Check if update is needed
+                if last_update is None or last_update < today:
+                    if nation in ['kr', 'us']:
+                        data = self.read_krx_code() if nation == 'kr' else self.read_spx_code()
+                        update_data = [(row['code'], row['company'], today, nation) for idx, row in data.iterrows()]
+                        curs.executemany("REPLACE INTO company_info (code, company, last_update, country) VALUES (%s, %s, %s, %s)", update_data)
+                        self.conn.commit()
 
-            elif nation == 'us':
-                if not rs or rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
-                    spx = self.read_spx_code()
-                    for idx in range(len(spx)):
-                        code = spx.code.values[idx]
-                        company = spx.company.values[idx]
-                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
-                        curs.execute(sql)
-                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
-                    self.conn.commit()
-                    print('')
+                    elif nation == 'all':
+                        self.update_comp_info('kr')
+                        self.update_comp_info('us')
 
-            elif nation == 'all':
-                if not rs or rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
-                    self.update_comp_info('kr')
-                    self.update_comp_info('us')
-                    print('')
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     def read_naver(self, code, period):
         try:
