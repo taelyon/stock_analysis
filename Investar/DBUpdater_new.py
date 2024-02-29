@@ -18,7 +18,6 @@ warnings.filterwarnings('ignore')
 class DBUpdater:
     def __init__(self):
         self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
-
         with self.conn.cursor() as curs:
             sql = """CREATE TABLE IF NOT EXISTS company_info (code VARCHAR(20), company VARCHAR(50), last_update 
             DATE, country VARCHAR(20), PRIMARY KEY (code)) """    #country 추가
@@ -321,7 +320,7 @@ class DBUpdater:
                 df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
                 df = df.dropna()
                 df = df.iloc[-3:]
-
+                return df
             elif period == 2:
                 com = pdr.get_data_yahoo(code, '2021-01-01', datetime.today())
                 com['date'] = com.index.strftime('%Y-%m-%d')
@@ -331,10 +330,17 @@ class DBUpdater:
                 df = df.rename(
                     columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close': 'close', 'Volume': 'volume'})
                 df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
+                return df
+        except requests.ConnectionError as e:
+            print(f"Connection error occurred: {e}")
+        # 연결 오류에 대한 추가 처리
+        except requests.Timeout as e:
+            print(f"Request timed out: {e}")
+            # 타임아웃 오류에 대한 추가 처리
         except Exception as e:
-            print('Exception occured :', str(e))
-            return None
-        return df
+            print(f"An unexpected error occurred: {e}")
+            # 기타 예상치 못한 오류에 대한 처리
+        return None  # 오류가 발생했을 경우 None을 반환하거나 적절한 복구 조치를 취합니다.
 
     def replace_into_db(self, df, num, code, company):
         with self.conn.cursor() as curs:
@@ -418,4 +424,3 @@ if __name__ == '__main__':
     dbu = DBUpdater()
     # dbu.update_comp_info('all')
     dbu.execute_daily()
-
