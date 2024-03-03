@@ -13,8 +13,8 @@ import os
 import time
 from PyQt5.QtWidgets import QMainWindow, QApplication, QShortcut
 from PyQt5.QtCore import *
+import chromedriver_autoinstaller
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 import logging
@@ -524,11 +524,11 @@ class MainWindow(QMainWindow):
                         company = ric.iloc[0]["ric"]
                         stock_url = f"https://m.stock.naver.com/worldstock/stock/{company}/total"
 
+                chromedriver_autoinstaller.install()
                 options = webdriver.ChromeOptions()
                 options.add_argument("headless")
                 options.add_experimental_option("excludeSwitches", ["enable-logging"])
-                # service = Service("chromedriver")
-                service = Service(ChromeDriverManager().install())
+                service = Service("chromedriver")
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.webEngineView.load(QUrl(stock_url))
 
