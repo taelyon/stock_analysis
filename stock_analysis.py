@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
         self.run = True
 
         self.connect_buttons()
+        chromedriver_autoinstaller.install()
 
         # 분석 화면
         self.fig = plt.figure()
@@ -524,13 +525,15 @@ class MainWindow(QMainWindow):
                         company = ric.iloc[0]["ric"]
                         stock_url = f"https://m.stock.naver.com/worldstock/stock/{company}/total"
 
-                chromedriver_autoinstaller.install()
+                # chromedriver_autoinstaller.install()
                 options = webdriver.ChromeOptions()
                 options.add_argument("headless")
                 options.add_experimental_option("excludeSwitches", ["enable-logging"])
                 service = Service("chromedriver")
+                service.creationflags = 0x08000000
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.webEngineView.load(QUrl(stock_url))
+                # self.driver.quit()
 
         except Exception as e:
             print(str(e))
