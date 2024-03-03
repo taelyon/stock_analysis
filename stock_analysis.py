@@ -529,7 +529,7 @@ class MainWindow(QMainWindow):
                 options = webdriver.ChromeOptions()
                 options.add_argument("headless")
                 options.add_experimental_option("excludeSwitches", ["enable-logging"])
-                service = Service("chromedriver")
+                service = Service()
                 service.creationflags = 0x08000000
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.webEngineView.load(QUrl(stock_url))
