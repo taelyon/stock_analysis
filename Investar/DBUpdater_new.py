@@ -8,6 +8,7 @@ from threading import Timer
 from pandas_datareader import data as pdr
 import yfinance as yf
 from Investar import Analyzer
+# import Analyzer
 # import sys
 # sys.path.append('/Investar')
 yf.pdr_override()
@@ -97,65 +98,70 @@ class DBUpdater:
         spx['code'] = spx['code'].str.replace(".", "-", regex=False)
         return spx
 
-        # result = []
-        # url = 'https://www.slickcharts.com/sp500'
-        # req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-        # soup = BeautifulSoup(req.text, features='lxml')
-        # box_type_l = soup.find("div", {"class": "shadow p-3 mb-5 bg-white rounded"})
-        # type_2 = box_type_l.find("table", {"class": "table table-hover table-borderless table-sm"})
-        # tbody = type_2.find("tbody")
-        # trs = tbody.findAll("tr")
-        # stockInfos = []
-        # for tr in trs:
-        #     try:
-        #         tds = tr.findAll("td")
-        #         aTag = tds[1].find("a")
-        #         href = aTag["href"]
-        #         name = aTag.text
-        #         stockInfo = {"code": href[8:], "company": name}
-        #         stockInfos.append(stockInfo)
-        #     except Exception as e:
-        #         pass
-        # list = stockInfos
-        # result += list
-        #
-        # spx = pd.DataFrame(result, columns=('code', 'company'))
-        # spx['company'] = spx['company'].str.replace("'", "")
-        # spx['company'] = spx['company'].str.replace("Inc.", "Inc", regex=False)
-        # spx['company'] = spx['company'].str.replace("Co.", "Co", regex=False)
-        # spx['company'] = spx['company'].str.replace("Corp.", "Corp", regex=False)
-        # spx['company'] = spx['company'].str.replace("Corporation", "Corp", regex=False)
-        # spx['code'] = spx['code'].str.replace(".", "-", regex=False)
-        #
-        # return spx
-
     def update_comp_info(self, nation):
-    # Check if connection is valid
-        if self.conn is None or not self.conn.open:
-            print("Database connection is not open.")
-            return
-        
-        # Get the last update date from the database
-        try:
-            with self.conn.cursor() as curs:
-                curs.execute("SELECT MAX(last_update) FROM company_info WHERE country = %s", (nation,))
-                last_update = curs.fetchone()[0]
-                today = datetime.today().date()
+        sql = "SELECT * FROM company_info"
+        df = pd.read_sql(sql, self.conn)
+        for idx in range(len(df)):
+            self.codes[df['code'].values[idx]] = df['company'].values[idx]
 
-                # Check if update is needed
-                if last_update is None or last_update < today:
-                    if nation in ['kr', 'us']:
-                        data = self.read_krx_code() if nation == 'kr' else self.read_spx_code()
-                        update_data = [(row['code'], row['company'], today, nation) for idx, row in data.iterrows()]
-                        curs.executemany("REPLACE INTO company_info (code, company, last_update, country) VALUES (%s, %s, %s, %s)", update_data)
-                        self.conn.commit()
+        with self.conn.cursor() as curs:
+            sql = "SELECT last_update FROM company_info"
+            curs.execute(sql)
+            rs = curs.fetchall()
+            today = datetime.today().strftime('%Y-%m-%d')
 
-                    elif nation == 'all':
-                        self.update_comp_info('kr')
-                        self.update_comp_info('us')
+            if nation == 'kr':
+                if rs[0][0] is None or rs[0][0].strftime('%Y-%m-%d') < today:
+                    krx = self.read_krx_code()
+                    for idx in range(len(krx)):
+                        code = krx.code.values[idx]
+                        company = krx.company.values[idx]
+                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
+                        curs.execute(sql)
+                        self.codes[code] = company
+                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
+                    self.conn.commit()
+                    print('')
 
-        except Exception as e:
-            print(f"An error occurred: {e}")
+            elif nation == 'us':
+                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
+                    spx = self.read_spx_code()
+                    for idx in range(len(spx)):
+                        code = spx.code.values[idx]
+                        company = spx.company.values[idx]
+                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
+                        curs.execute(sql)
+                        self.codes[code] = company
+                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
+                    self.conn.commit()
+                    print('')
+
+            elif nation == 'all':
+                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:  #DB 처음 실행시 오류(indexerrror) 나면 주석처리후 실행
+                    krx = self.read_krx_code()
+                    for idx in range(len(krx)):
+                        code = krx.code.values[idx]
+                        company = krx.company.values[idx]
+                        nation = 'kr'
+                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
+                        curs.execute(sql)
+                        self.codes[code] = company
+                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
+                    spx = self.read_spx_code()
+                    for idx in range(len(spx)):
+                        code = spx.code.values[idx]
+                        company = spx.company.values[idx]
+                        nation = 'us'
+                        sql = f"REPLACE INTO company_info (code, company, last_update, country) VALUES ('{code}','{company}','{today}','{nation}')"
+                        curs.execute(sql)
+                        self.codes[code] = company
+                        tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
+                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
+                    self.conn.commit()
+                    print('')
 
     def read_naver(self, code, period):
         try:
@@ -209,105 +215,10 @@ class DBUpdater:
         df_ric = df_ric.drop(df_ric.index[0])
         return df_ric
 
-    # def read_investpy(self, code, period): #invest.com 주가 읽어오기
-    #     try:
-    #         if period == 1:
-    #             com = investpy.get_stock_recent_data(code, 'United States')
-    #             com['date'] = com.index
-    #             com = com.reset_index(drop=True)
-    #             com['code'] = code
-    #             df = com[['code', 'date', 'Open', 'High', 'Low', 'Close', 'Volume']]
-    #             df = df.rename(
-    #                 columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'})
-    #             df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-    #             df = df.dropna()
-    #             df = df.iloc[-3:]
-    #         elif period == 2:
-    #             com = investpy.get_stock_historical_data(code, 'United States', '01/01/2021', datetime.today().strftime("%d/%m/%Y"))
-    #             com['date'] = com.index
-    #             com = com.reset_index(drop=True)
-    #             com['code'] = code
-    #             df = com[['code', 'date', 'Open', 'High', 'Low', 'Close', 'Volume']]
-    #             df = df.rename(
-    #                 columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'})
-    #             df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-    #     except Exception as e:
-    #         print('Exception occured :', str(e))
-    #         return None
-    #     return df
-
     def read_yfinance(self, code, period):
         # 야후 파이낸스 주가 읽어오기
         try:
             if period == 1:
-                # 야후 활용
-                # result = []
-                # timenow = int(datetime.today().timestamp())
-                # starttime = int((datetime.today() - timedelta(days=10)).timestamp())
-                # url = f'https://finance.yahoo.com/quote/{code}/history?period1={starttime}&period2={timenow}&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true'
-                # req = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, verify=False)
-                # soup = BeautifulSoup(req.text, "lxml")
-                # box_type_l = soup.find("div", {"class": "Pb(10px) Ovx(a) W(100%)"})
-                # type_2 = box_type_l.find("table", {"class": "W(100%) M(0)"})
-                # tbody = type_2.find("tbody")
-                # trs = tbody.findAll("tr")
-                # stockInfos = []
-                # for tr in trs:
-                #     try:
-                #         tds = tr.findAll("td")
-                #         date = tds[0].text
-                #         open = tds[1].text
-                #         high = tds[2].text
-                #         low = tds[3].text
-                #         close = tds[5].text
-                #         volume = tds[6].text
-                #         stockInfo = {"date": date, "open": open, 'high': high, 'low': low, 'close': close,
-                #                      'volume': volume}
-                #         stockInfos.append(stockInfo)
-                #     except Exception as e:
-                #         pass
-                # list = stockInfos
-                # result += list
-                # df = pd.DataFrame(result)
-                # df['date'] = pd.to_datetime(df['date'])
-                # df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].apply(
-                #     pd.to_numeric, errors='coerce').fillna(0)
-                # df = df.iloc[:3]
-
-                # 야후 활용2
-                # timenow = int(datetime.today().timestamp())
-                # starttime = int((datetime.today() - timedelta(days=10)).timestamp())
-                # url = f'https://finance.yahoo.com/quote/{code}/history?period1={starttime}&period2={timenow}&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true'
-                # page = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, verify=False)
-                # element_html = html.fromstring(page.content)
-                # table = element_html.xpath('//table')
-                # table_tree = lxml.etree.tostring(table[0], method='xml')
-                # com = pd.read_html(table_tree)[0]
-                # com['code'] = code
-                # com = com.iloc[:3]
-                #
-                # df = com[['code', 'Date', 'Open', 'High', 'Low', 'Adj Close**', 'Volume']]
-                # df['date'] = pd.to_datetime(df['Date'])
-                # df = df.rename(
-                #         columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close**': 'close', 'Volume': 'volume'})
-                # df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].apply(
-                #         pd.to_numeric, errors='coerce').fillna(0)
-                # df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-
-                # 네이버 활용
-                # riccode = self.df_ric[self.df_ric['code']==code].iloc[0]['ric']
-                # url = f'https://api.stock.naver.com/chart/foreign/item/{riccode}?periodType=dayCandle'
-                # html = urlopen(url)
-                # json_obj = json.load(html)
-                # data = json_obj['priceInfos']
-                # df = pd.DataFrame(data)
-                # df['localDate'] = pd.to_datetime(df['localDate'])
-                # df = df.rename(
-                #     columns={'localDate': 'date', 'openPrice': 'open', 'highPrice': 'high', 'lowPrice': 'low',
-                #              'closePrice': 'close', 'accumulatedTradingVolume': 'volume'})
-                # df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-                # df = df.iloc[-3:]
-                # print(df.info())
 
                 # pdr 활용
                 com = pdr.get_data_yahoo(code, (datetime.today() - timedelta(days=6)), datetime.today())
