@@ -80,3 +80,6 @@ class MarketDB:
         df.index = df['date']
         return df
 
+if __name__ == '__main__':
+    mkdb = MarketDB()
+    mkdb.get_comp_info()

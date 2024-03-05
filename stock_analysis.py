@@ -17,7 +17,6 @@ import chromedriver_autoinstaller
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
-import logging
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
@@ -150,14 +149,29 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Error occurred while updating stocks: {str(e)}")
 
+    def update_stock_price(self, company, period):
+        mk = Analyzer.MarketDB()
+        stk = mk.get_comp_info()
+        val = stk[(stk['company'] == company) | (stk['code'] == company)]
+        code = val.iloc[0]['code']
+        company = val.iloc[0]['company']
+
+        db_updater = DBUpdater_new.DBUpdater()
+        if val.iloc[0]['country'] == 'kr':
+            df = db_updater.read_naver(code, period)
+        elif val.iloc[0]['country'] == 'us':
+            db_updater.ric_code()
+            df = db_updater.read_yfinance(code, period)
+        # df = df.dropna()
+        db_updater.replace_into_db(df, 0, code, company)
+
     def update_specific_stock(self):
         try:
-            db_updater = DBUpdater_new.DBUpdater()
             company = self.ent_stock.text()
             if self.btn_period1.isChecked():
-                db_updater.update_stock_price(company, 1)
+                self.update_stock_price(company, 1)
             elif self.btn_period2.isChecked():
-                db_updater.update_stock_price(company, 2)
+                self.update_stock_price(company, 2)
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
         except Exception as e:
@@ -272,8 +286,7 @@ class MainWindow(QMainWindow):
                     print(str(e))
 
     def update_and_show_stock(self, company):
-        db_updater = DBUpdater_new.DBUpdater()
-        db_updater.update_stock_price(company, 1)
+        self.update_stock_price(company, 1)
         Thread(target=self.show_graph, args=(company,), daemon=True).start()
         self.show_info(company)
 
@@ -321,8 +334,7 @@ class MainWindow(QMainWindow):
         db_updater = DBUpdater_new.DBUpdater()
         db_updater.update_daily_price("stop")
         time.sleep(0.2)
-        db_updater = DBUpdater_new.DBUpdater()
-        db_updater.update_stock_price(company, 1)
+        self.update_stock_price(company, 1)
         Thread(target=self.show_graph, args=(company,), daemon=True).start()
         self.show_info(company)
 

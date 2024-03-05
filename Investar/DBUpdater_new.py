@@ -6,9 +6,9 @@ import pymysql
 import calendar
 from threading import Timer
 from pandas_datareader import data as pdr
-import sys
-sys.path.append('c:/myPackage/stock/Investar')  # Analyzer 모듈이 있는 경로 추가
-import Analyzer
+# import sys
+# sys.path.append('c:/myPackage/stock/Investar')  # Analyzer 모듈이 있는 경로 추가
+# import Analyzer
 import yfinance as yf
 yf.pdr_override()
 requests.packages.urllib3.disable_warnings()
@@ -316,19 +316,19 @@ class DBUpdater:
         print("Waiting for next update ({}) ...".format(tmnext.strftime('%Y-%m-%d %H:%M')))
         t.start()
 
-    def update_stock_price(self, company, period):
-        mk = Analyzer.MarketDB()
-        stk = mk.get_comp_info()
-        val = stk[(stk['company'] == company) | (stk['code'] == company)]
-        code = val.iloc[0]['code']
-        company = val.iloc[0]['company']
-        if val.iloc[0]['country'] == 'kr':
-            df = self.read_naver(code, period)
-        elif val.iloc[0]['country'] == 'us':
-            self.ric_code()
-            df = self.read_yfinance(code, period)
-        # df = df.dropna()
-        self.replace_into_db(df, 0, code, company)
+    # def update_stock_price(self, company, period):
+    #     mk = Analyzer.MarketDB()
+    #     stk = mk.get_comp_info()
+    #     val = stk[(stk['company'] == company) | (stk['code'] == company)]
+    #     code = val.iloc[0]['code']
+    #     company = val.iloc[0]['company']
+    #     if val.iloc[0]['country'] == 'kr':
+    #         df = self.read_naver(code, period)
+    #     elif val.iloc[0]['country'] == 'us':
+    #         self.ric_code()
+    #         df = self.read_yfinance(code, period)
+    #     # df = df.dropna()
+    #     self.replace_into_db(df, 0, code, company)
 
 if __name__ == '__main__':
     dbu = DBUpdater()
