@@ -13,7 +13,7 @@ if %errorlevel%==0 (
 
 ) else (
     echo Internet connection is not available. Waiting for 60 seconds before retrying...
-    timeout /t 60
+    timeout /t 10
     goto retry
 )
 pause

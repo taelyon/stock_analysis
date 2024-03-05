@@ -6,13 +6,10 @@ import pymysql
 import calendar
 from threading import Timer
 from pandas_datareader import data as pdr
-import yfinance as yf
 import sys
-import os
-current_path = os.path.dirname(os.path.abspath(__file__))
-if current_path not in sys.path:
-    sys.path.append(current_path)
+sys.path.append('c:/myPackage/stock/Investar')  # Analyzer 모듈이 있는 경로 추가
 import Analyzer
+import yfinance as yf
 yf.pdr_override()
 requests.packages.urllib3.disable_warnings()
 import warnings
