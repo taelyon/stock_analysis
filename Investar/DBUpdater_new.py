@@ -7,10 +7,12 @@ import calendar
 from threading import Timer
 from pandas_datareader import data as pdr
 import yfinance as yf
-from Investar import Analyzer
-# import Analyzer
-# import sys
-# sys.path.append('/Investar')
+import sys
+import os
+current_path = os.path.dirname(os.path.abspath(__file__))
+if current_path not in sys.path:
+    sys.path.append(current_path)
+import Analyzer
 yf.pdr_override()
 requests.packages.urllib3.disable_warnings()
 import warnings

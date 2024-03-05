@@ -1,6 +1,7 @@
 @echo off
 title stock_db update
 
+:retry
 ping -n 1 www.google.com > nul
 if %errorlevel%==0 (
     echo Internet connection is available.
@@ -11,6 +12,8 @@ if %errorlevel%==0 (
     cmd.exe
 
 ) else (
-    echo Internet connection is not available. Please check your connection.
+    echo Internet connection is not available. Waiting for 60 seconds before retrying...
+    timeout /t 60
+    goto retry
 )
 pause
