@@ -1,7 +1,7 @@
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import requests, lxml
+import requests
 import pymysql
 import calendar
 from threading import Timer
@@ -33,53 +33,32 @@ class DBUpdater:
 
     def read_krx_code(self):
         result = []
-        for sosok in range(0, 2):
-            if sosok == 0:
-                for page in range(1, 8):
-                    url = "https://finance.naver.com/sise/sise_market_sum.nhn?sosok={}&page={}".format(sosok, page)
-                    data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-                    bsObj = BeautifulSoup(data.text, "html.parser")
-                    box_type_l = bsObj.find("div", {"class": "box_type_l"})
-                    type_2 = box_type_l.find("table", {"class": "type_2"})
-                    tbody = type_2.find("tbody")
-                    trs = tbody.findAll("tr")
-                    stockInfos = []
-                    for tr in trs:
-                        try:
-                            tds = tr.findAll("td")
-                            aTag = tds[1].find("a")
-                            href = aTag["href"]
-                            name = aTag.text
-                            stockInfo = {"code": href[22:], "company": name}
-                            stockInfos.append(stockInfo)
-                        except Exception as e:
-                            pass
-                    list = stockInfos
-                    result += list
-            elif sosok == 1:
-                for page in range(1, 4):
-                    url = "https://finance.naver.com/sise/sise_market_sum.nhn?sosok={}&page={}".format(sosok, page)
-                    data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-                    bsObj = BeautifulSoup(data.text, "html.parser")
-                    box_type_l = bsObj.find("div", {"class": "box_type_l"})
-                    type_2 = box_type_l.find("table", {"class": "type_2"})
-                    tbody = type_2.find("tbody")
-                    trs = tbody.findAll("tr")
-                    stockInfos = []
-                    for tr in trs:
-                        try:
-                            tds = tr.findAll("td")
-                            aTag = tds[1].find("a")
-                            href = aTag["href"]
-                            name = aTag.text
-                            stockInfo = {"code": href[22:], "company": name}
-                            stockInfos.append(stockInfo)
-                        except Exception as e:
-                            pass
-                    list = stockInfos
-                    result += list
+        # Consolidate requests for KOSPI (sosok=0) and KOSDAQ (sosok=1)
+        for sosok in range(2):
+            # Set different page ranges for KOSPI and KOSDAQ
+            page_range = 8 if sosok == 0 else 4
+            for page in range(1, page_range):
+                url = f"https://finance.naver.com/sise/sise_market_sum.nhn?sosok={sosok}&page={page}"
+                data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'})
+                bsObj = BeautifulSoup(data.text, "html.parser")
 
-        krx = pd.DataFrame(result, columns=('code', 'company'))
+                # Simplify finding the table with stock information
+                type_2 = bsObj.find("table", {"class": "type_2"})
+                trs = type_2.find("tbody").findAll("tr")
+
+                for tr in trs:
+                    try:
+                        tds = tr.findAll("td")
+                        if len(tds) > 1:  # Ensure the row has the necessary data fields
+                            aTag = tds[1].find("a")
+                            stock_code = aTag['href'].split('=')[-1]  # Get stock code directly from the link
+                            stock_name = aTag.text.strip()  # Clean stock name from any surrounding whitespaces
+                            result.append({"code": stock_code, "company": stock_name})
+                    except Exception as e:
+                        continue  # Skip rows that don't match the expected format
+
+        # Create DataFrame from the accumulated results
+        krx = pd.DataFrame(result, columns=['code', 'company'])
         return krx
 
     def read_spx_code(self):
@@ -165,7 +144,7 @@ class DBUpdater:
     def read_naver(self, code, period):
         try:
             if period == 1:
-                url = f'https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=3&requestType=0'
+                url = f'https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=5&requestType=0'
             elif period == 2:
                 url = f'https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=500&requestType=0'
             req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
@@ -215,42 +194,46 @@ class DBUpdater:
         return df_ric
 
     def read_yfinance(self, code, period):
-        # 야후 파이낸스 주가 읽어오기
+   
         try:
+            # Set date range based on 'period'
             if period == 1:
-
-                # pdr 활용
-                com = pdr.get_data_yahoo(code, (datetime.today() - timedelta(days=6)), datetime.today())
-                com['date'] = com.index.strftime('%Y-%m-%d')
-                com = com.reset_index(drop=True)
-                com['code'] = code
-                df = com[['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']]
-                df = df.rename(
-                    columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close': 'close', 'Volume': 'volume'})
-                df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-                df = df.dropna()
-                df = df.iloc[-3:]
-                return df
+                start_date = datetime.today() - timedelta(days=10)
             elif period == 2:
-                com = pdr.get_data_yahoo(code, '2021-01-01', datetime.today())
-                com['date'] = com.index.strftime('%Y-%m-%d')
-                com = com.reset_index(drop=True)
-                com['code'] = code
-                df = com[['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']]
-                df = df.rename(
-                    columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close': 'close', 'Volume': 'volume'})
-                df = df[['date', 'open', 'high', 'low', 'close', 'volume']]
-                return df
+                start_date = datetime(2021, 1, 1)
+            else:
+                print("Invalid period. Choose 1 for the last week or 2 for data since 2021.")
+                return None
+
+            # Fetch data from Yahoo Finance
+            stock_data = pdr.get_data_yahoo(code, start_date, datetime.today())
+            stock_data['date'] = stock_data.index.strftime('%Y-%m-%d')
+            stock_data.reset_index(drop=True, inplace=True)
+            stock_data['code'] = code
+            
+            # Select and rename columns
+            columns = ['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']
+            stock_data = stock_data[columns]
+            stock_data.rename(columns={
+                'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close': 'close', 'Volume': 'volume'
+            }, inplace=True)
+            stock_data = stock_data[['date', 'open', 'high', 'low', 'close', 'volume']].dropna()
+
+            # For period == 1, return the last 3 days of data
+            if period == 1:
+                return stock_data.iloc[-3:]
+            
+            # For period == 2, return all data since start_date
+            return stock_data
+
         except requests.ConnectionError as e:
             print(f"Connection error occurred: {e}")
-        # 연결 오류에 대한 추가 처리
         except requests.Timeout as e:
             print(f"Request timed out: {e}")
-            # 타임아웃 오류에 대한 추가 처리
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
-            # 기타 예상치 못한 오류에 대한 처리
-        return None  # 오류가 발생했을 경우 None을 반환하거나 적절한 복구 조치를 취합니다.
+    
+        return None  # Return None if errors occurred
 
     def replace_into_db(self, df, num, code, company):
         with self.conn.cursor() as curs:
