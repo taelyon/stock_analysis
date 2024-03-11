@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 from Investar import Analyzer
 
-company = 'TSLA'
+company = 'NVDA'
 start_date = '2020-01-01'
 
 class MyStrategy(bt.Strategy):
