@@ -8,6 +8,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import sys
 import os
 import time
+from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
 import chromedriver_autoinstaller
@@ -496,39 +497,31 @@ class MyMainWindow(QMainWindow):
         try:
             mk = Analyzer.MarketDB()
             stock_list = mk.get_comp_info()
-            db_updater = DBUpdater_new.DBUpdater()
-            ric_code = db_updater.ric_code()
-            val = stock_list[
-                (stock_list["company"] == company) | (stock_list["code"] == company)
-            ]
+            val = stock_list[(stock_list["company"] == company) | (stock_list["code"] == company)]
+
             if not val.empty:
-                if val.iloc[0]["country"] == "kr":
-                    company = val.iloc[0]["code"]
-                    stock_url = (
-                        f"https://m.stock.naver.com/domestic/stock/{company}/total"
-                    )
-                elif val.iloc[0]["country"] == "us":
-                    code = val.iloc[0]["code"]
+                country = val.iloc[0]["country"]
+                code = val.iloc[0]["code"]
+
+                if country == "kr":
+                    stock_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+                elif country == "us":
+                    db_updater = DBUpdater_new.DBUpdater()
+                    ric_code = db_updater.ric_code()
                     ric = ric_code[ric_code["code"] == code]
                     if not ric.empty:
-                        company = ric.iloc[0]["ric"]
-                        stock_url = f"https://m.stock.naver.com/worldstock/stock/{company}/total"
+                        ric_val = ric.iloc[0]["ric"]
+                        stock_url = f"https://m.stock.naver.com/worldstock/stock/{ric_val}/total"
+                    else:
+                        raise ValueError(f"No RIC code found for US company: {company}")
+                else:
+                    raise ValueError(f"Unsupported country for company: {company}")
 
-                # chromedriver_autoinstaller.install()
-                options = webdriver.ChromeOptions()
-                options.add_argument("headless")
-                options.add_experimental_option("excludeSwitches", ["enable-logging"])
-                service = Service()
-                service.creationflags = 0x08000000
-                self.driver = webdriver.Chrome(service=service, options=options)
-                self.ui.webEngineView.load(QUrl(stock_url))
-                # self.driver.quit()
+                self.ui.webEngineView.load(QtCore.QUrl(stock_url))
 
         except Exception as e:
-            print(str(e))
-        finally:
-            if hasattr(self, "driver"):
-                self.driver.close()
+            print(f"Error in show_info: {str(e)}")
+
 
     
 if __name__ == "__main__":
