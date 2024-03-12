@@ -3,16 +3,20 @@ from datetime import datetime
 import pandas as pd
 from Investar import Analyzer
 
-company = 'NVDA'
-start_date = '2020-01-01'
+company = 'IONQ'
+start_date = '2022-01-01'
 
 class MyStrategy(bt.Strategy):
     def __init__(self):
         self.dataclose = self.datas[0].close
+        self.dataopen = self.datas[0].open
         self.order = None
         self.buyprice = None
         self.buycomm = None        
-        self.rsi = bt.indicators.RSI_SMA(self.data.close, period=21)
+        self.rsi = bt.indicators.RSI_SMA(self.data.close, period=14)
+        self.ema5 = bt.indicators.EMA(self.data.close, period=5)
+        self.ema10 = bt.indicators.EMA(self.data.close, period=10)
+        self.macdhist = bt.indicators.MACDHisto(self.data.close)
 
     def notify_order(self, order):  # ①
         if order.status in [order.Submitted, order.Accepted]:
@@ -41,10 +45,10 @@ class MyStrategy(bt.Strategy):
 
     def next(self):
         if not self.position:
-            if self.rsi < 30:
+            if (self.rsi[-1] < 30 < self.rsi[0] and self.macdhist.macd[-1] < self.macdhist.macd[0]) or (self.macdhist.histo[-1] < 0 < self.macdhist.histo[0]):
                 self.order = self.buy()
         else:
-            if self.rsi > 70:
+            if ((self.ema5[-1] > self.ema10[-1]) and (self.ema5[0] < self.ema10[0]) and (self.macdhist.macd[-1] > self.macdhist.macd[0])) or (self.macdhist.histo[-1]> 0 > self.macdhist.histo[0]):
                 self.order = self.sell()
 
     def log(self, txt, dt=None):  # ③ 

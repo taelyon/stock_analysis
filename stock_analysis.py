@@ -217,46 +217,24 @@ class MainWindow(QMainWindow):
         for idx in range(len(stock_list)):
             if self.run:
                 company = stock_list["company"].values[idx]
-                len_code = stock_list["len_code"].values[idx]
                 mk = Analyzer.MarketDB()
-                df = mk.get_daily_price(company, "2020-07-01")
+                df = mk.get_daily_price(company, "2022-01-01")
 
-                df["MA20"] = df["close"].rolling(window=20).mean()
-                df["ENTOP"] = df["MA20"] + df["MA20"] * 0.1
-                df["ENBOTTOM"] = df["MA20"] - df["MA20"] * 0.1
-                # df['stddev'] = df['close'].rolling(window=20).std()
-                # df['upper'] = df['MA20'] + (df['stddev'] * 2)
-                # df['lower'] = df['MA20'] - (df['stddev'] * 2)
-                df["VOL5"] = df["volume"].rolling(window=5).mean()
-                # df['value'] = df['close'] * df['volume']
-                # df['RET20'] = round(((df['close'] - df['close'].shift(20)) / df['close'].shift(20)) * 100, 1)
-                # df['RET5'] = round(((df['close'] - df['close'].shift(5)) / df['close'].shift(5)) * 100, 1)
-                # df['RET1'] = round(((df['close'] - df['close'].shift(1)) / df['close'].shift(1)) * 100, 1)
-                df["U"] = df["close"].diff().clip(lower=0)
-                df["D"] = -df["close"].diff().clip(upper=0)
-                df["RS"] = (
-                    df.U.rolling(window=14).mean() / df.D.rolling(window=14).mean()
-                )
-                df["RSI"] = 100 - 100 / (1 + df["RS"])
+                df.MA20 = df.close.rolling(window=20).mean()
+                df.ENTOP = df.MA20 + df.MA20 * 0.1
+                df['ENBOTTOM'] = df.MA20 - df.MA20 * 0.1
+                df.U = df.close.diff().clip(lower=0)
+                df.D = -df.close.diff().clip(upper=0)
+                df.RS = (df.U.rolling(window=14).mean() / df.D.rolling(window=14).mean())
+                df['RSI'] = 100 - 100 / (1 + df.RS)
                 df = df.dropna()
 
-                ema5 = df.close.ewm(span=5).mean()
-                ema10 = df.close.ewm(span=10).mean()
-                ema20 = df.close.ewm(span=20).mean()
-                ema60 = df.close.ewm(span=60).mean()
-                ema130 = df.close.ewm(span=130).mean()
-                ema12 = df.close.ewm(span=12).mean()
-                ema26 = df.close.ewm(span=26).mean()
+                ema12 = df.close.ewm(span=12, adjust=False).mean()
+                ema26 = df.close.ewm(span=26, adjust=False).mean()
                 macd = ema12 - ema26
-                signal = macd.ewm(span=9).mean()
+                signal = macd.ewm(span=9, adjust=False).mean()
                 macdhist = macd - signal
-                df = df.assign(
-                    ema5=ema5,
-                    ema10=ema10,
-                    ema20=ema20,
-                    ema130=ema130,
-                    ema60=ema60,
-                    ema12=ema12,
+                df = df.assign(ema12=ema12,
                     ema26=ema26,
                     macd=macd,
                     signal=signal,
@@ -264,11 +242,11 @@ class MainWindow(QMainWindow):
                 ).dropna()
                 df.index = pd.to_datetime(df.date)
 
-                ndays_high = df.high.rolling(window=14, min_periods=1).max()
-                ndays_low = df.low.rolling(window=14, min_periods=1).min()
-                fast_k = (df.close - ndays_low) / (ndays_high - ndays_low) * 100
-                slow_d = fast_k.rolling(window=3).mean()
-                df = df.assign(fast_k=fast_k, slow_d=slow_d).dropna()
+                # ndays_high = df.high.rolling(window=14, min_periods=1).max()
+                # ndays_low = df.low.rolling(window=14, min_periods=1).min()
+                # fast_k = (df.close - ndays_low) / (ndays_high - ndays_low) * 100
+                # slow_d = fast_k.rolling(window=3).mean()
+                # df = df.assign(fast_k=fast_k, slow_d=slow_d).dropna()
 
                 print(company)
 
@@ -342,7 +320,7 @@ class MainWindow(QMainWindow):
     def show_graph(self, company):
         try:
             mk = Analyzer.MarketDB()
-            df = mk.get_daily_price(company, "2021-01-01")
+            df = mk.get_daily_price(company, "2022-01-01")
 
             df["MA20"] = df["close"].rolling(window=20).mean()
             df["ENTOP"] = df["MA20"] + df["MA20"] * 0.1
@@ -359,10 +337,10 @@ class MainWindow(QMainWindow):
 
             ema_values = [5, 10, 20, 60, 130, 12, 26]
             for val in ema_values:
-                df[f"ema{val}"] = df.close.ewm(span=val).mean()
+                df[f"ema{val}"] = df.close.ewm(span=val, adjust=False).mean()
 
             macd = df.ema12 - df.ema26
-            signal = macd.ewm(span=9).mean()
+            signal = macd.ewm(span=9, adjust=False).mean()
             macdhist = macd - signal
             df = df.assign(macd=macd, signal=signal, macdhist=macdhist)
             df["number"] = df.index.map(mdates.date2num)
@@ -405,8 +383,7 @@ class MainWindow(QMainWindow):
             p1.plot(df.index, df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
             p1.plot(df.index, df["ema20"], color="orange", alpha=0.7, label="EMA20")
             # p1.plot(df.index, df['ema130'], color='black', alpha=0.7, label='EMA130')
-
-            for i in range(len(df.close)):
+            for i in range(len(df.close)):            
                 if (
                     (
                         df.close.values[i] < df.ENBOTTOM.values[i]
@@ -422,7 +399,7 @@ class MainWindow(QMainWindow):
                         markersize=8,
                         markeredgecolor="black",
                     )
-                elif (df.RSI.values[i - 1] < 30 < df.RSI.values[i]) or (
+                elif (df.RSI.values[i - 1] < 30 < df.RSI.values[i] and df.macd.values[i-1] < df.macd.values[i]) or (
                         df.macdhist.values[i - 1] < 0 < df.macdhist.values[i]
                 ):
                     p1.plot(
