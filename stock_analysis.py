@@ -11,9 +11,6 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
-import chromedriver_autoinstaller
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from gui import MainWindow, StdoutRedirect
 
 pd.set_option("display.max_rows", None)
@@ -30,7 +27,6 @@ class MyMainWindow(QMainWindow):
         self.ui = MainWindow()
         self.ui.setupUi(self)
         self.connect_buttons()
-        chromedriver_autoinstaller.install()
 
         # 분석 화면
         self.fig = plt.figure()
