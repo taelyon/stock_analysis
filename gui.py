@@ -7,9 +7,9 @@ import sys
 
 class MainWindow(QMainWindow):
     # All your GUI setup and event handlers here
-    # def __init__(self):
-    #     super().__init__()
-    # #     self.setupUi(self)
+    def __init__(self):
+        super().__init__()
+        self.setupUi(self)
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")

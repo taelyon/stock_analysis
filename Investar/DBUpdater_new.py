@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 
 class DBUpdater:
     def __init__(self):
-        self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
+        self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8mb4')
         with self.conn.cursor() as curs:
             sql = """CREATE TABLE IF NOT EXISTS company_info (code VARCHAR(20), company VARCHAR(50), last_update 
             DATE, country VARCHAR(20), PRIMARY KEY (code)) """    #country 추가
@@ -85,11 +85,12 @@ class DBUpdater:
         with self.conn.cursor() as curs:
             sql = "SELECT last_update FROM company_info"
             curs.execute(sql)
-            rs = curs.fetchall()
+            rs = curs.fetchone()
             today = datetime.today().strftime('%Y-%m-%d')
 
             if nation == 'kr':
-                if rs[0][0] is None or rs[0][0].strftime('%Y-%m-%d') < today:
+                if rs is None or rs[0].strftime('%Y-%m-%d') < today:
+                    print('한국 주식 종목 업데이트')
                     krx = self.read_krx_code()
                     for idx in range(len(krx)):
                         code = krx.code.values[idx]
@@ -98,12 +99,13 @@ class DBUpdater:
                         curs.execute(sql)
                         self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     self.conn.commit()
+                    print(f"[{tmnow}] REPLACE INTO company_info VALUES ({today}, {nation})")
                     print('')
 
             elif nation == 'us':
-                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:
+                if rs is None or rs[-1].strftime('%Y-%m-%d') < today:
+                    print('미국 주식 종목 업데이트')
                     spx = self.read_spx_code()
                     for idx in range(len(spx)):
                         code = spx.code.values[idx]
@@ -112,12 +114,13 @@ class DBUpdater:
                         curs.execute(sql)
                         self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     self.conn.commit()
+                    print(f"[{tmnow}] REPLACE INTO company_info VALUES ({today}, {nation})")
                     print('')
 
             elif nation == 'all':
-                if rs[-1][0] is None or rs[-1][0].strftime('%Y-%m-%d') < today:  #DB 처음 실행시 오류(indexerrror) 나면 주석처리후 실행
+                if rs is None or rs[-1].strftime('%Y-%m-%d') < today:  #rs[0]을 rs로 수정하여 DB 처음 실행시에도 가능
+                    print('전체 주식 종목 업데이트')
                     krx = self.read_krx_code()
                     for idx in range(len(krx)):
                         code = krx.code.values[idx]
@@ -127,7 +130,6 @@ class DBUpdater:
                         curs.execute(sql)
                         self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     spx = self.read_spx_code()
                     for idx in range(len(spx)):
                         code = spx.code.values[idx]
@@ -137,8 +139,8 @@ class DBUpdater:
                         curs.execute(sql)
                         self.codes[code] = company
                         tmnow = datetime.now().strftime('%Y-%m-%d %H:%M')
-                        print(f"[{tmnow}] {idx:04d} REPLACE INTO company_info VALUES ({code}, {company}, {today}, {nation})")
                     self.conn.commit()
+                    print(f"[{tmnow}] REPLACE INTO company_info VALUES ({today}, {nation})")
                     print('')
 
     def read_naver(self, code, period):
@@ -268,9 +270,9 @@ class DBUpdater:
                     df = self.read_yfinance(code, 1)
                 elif nation == 'all':
                     if len(code) >= 6:
-                        df = self.read_naver(code, 1)  # For initial run, change to 2 to update
+                        df = self.read_naver(code, 2)  # For initial run, change to 2 to update
                     else:
-                        df = self.read_yfinance(code, 1)  # For initial run, change to 2 to update
+                        df = self.read_yfinance(code, 2)  # For initial run, change to 2 to update
                 else:
                     continue  # Skip if none of the conditions match
 
