@@ -11,110 +11,118 @@ import time
 from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
-from gui import MainWindow, StdoutRedirect
+from PyQt5 import uic
+
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 
+#UI파일 연결. 단, UI파일은 Python 코드 파일과 같은 디렉토리에 위치해야한다.
+ui = uic.loadUiType("stock.ui")[0]
 
-class MyMainWindow(QMainWindow):
+class MyMainWindow(QMainWindow, ui):
     def __init__(self):
         super().__init__()
 
         self.codes = {}
         self.run = True
 
-        self.ui = MainWindow()
-        self.ui.setupUi(self)
+        # self.ui = MainWindow()
+        self.setupUi(self)
         self.connect_buttons()
 
         # 분석 화면
         self.fig = plt.figure()
         self.canvas = FigureCanvas(self.fig)
-        self.ui.verticalLayout_2.addWidget(self.canvas)
+        self.verticalLayout_2.addWidget(self.canvas)
 
         # 로그 화면
         self._stdout = StdoutRedirect()
         self._stdout.start()
-        self._stdout.printOccur.connect(lambda x: self.ui._append_text(x))
+        self._stdout.printOccur.connect(lambda x: self._append_text(x))
+
+    def _append_text(self, msg):
+        self.log_widget.moveCursor(QtGui.QTextCursor.End)
+        self.log_widget.insertPlainText(msg)
+        QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
 
     def connect_buttons(self):
         # 종목 업데이트
 
-        self.ui.btn_update1.clicked.connect(lambda: self.start_thread(self.update_stocks, "kr"))
-        self.ui.btn_update2.clicked.connect(lambda: self.start_thread(self.update_stocks, "us"))
-        self.ui.btn_update3.clicked.connect(lambda: self.start_thread(self.update_stocks, "all"))
-        self.ui.btn_stop1.clicked.connect(lambda: self.update_stocks("stop"))
-        self.ui.btn_update4.clicked.connect(lambda: self.start_thread(self.update_specific_stock))
+        self.btn_update1.clicked.connect(lambda: self.start_thread(self.update_stocks, "kr"))
+        self.btn_update2.clicked.connect(lambda: self.start_thread(self.update_stocks, "us"))
+        self.btn_update3.clicked.connect(lambda: self.start_thread(self.update_stocks, "all"))
+        self.btn_stop1.clicked.connect(lambda: self.update_stocks("stop"))
+        self.btn_update4.clicked.connect(lambda: self.start_thread(self.update_specific_stock))
 
 
         # 종목 탐색
 
-        self.ui.btn_search1.clicked.connect(lambda: self.start_thread(self.search_stock, "kr"))
-        self.ui.btn_search2.clicked.connect(lambda: self.start_thread(self.search_stock, "us"))
-        self.ui.btn_search3.clicked.connect(lambda: self.start_thread(self.search_stock, "all"))
-        self.ui.btn_stop2.clicked.connect(lambda: self.search_stock("stop"))
+        self.btn_search1.clicked.connect(lambda: self.start_thread(self.search_stock, "kr"))
+        self.btn_search2.clicked.connect(lambda: self.start_thread(self.search_stock, "us"))
+        self.btn_search3.clicked.connect(lambda: self.start_thread(self.search_stock, "all"))
+        self.btn_stop2.clicked.connect(lambda: self.search_stock("stop"))
 
-        self.ui.btn.clicked.connect(self.btncmd)
-        self.ui.btn_addhold.clicked.connect(
+        self.btn.clicked.connect(self.btncmd)
+        self.btn_addhold.clicked.connect(
             lambda: self.manage_stock_list(
                 "add",
-                self.ui.lb_hold,
+                self.lb_hold,
                 "files/stock_hold.txt",
-                self.ui.lb_search.currentItem().text(),
+                self.lb_search.currentItem().text(),
             )
         )
-        self.ui.btn_addint.clicked.connect(
+        self.btn_addint.clicked.connect(
             lambda: self.manage_stock_list(
                 "add",
-                self.ui.lb_int,
+                self.lb_int,
                 "files/stock_interest.txt",
-                self.ui.lb_search.currentItem().text(),
+                self.lb_search.currentItem().text(),
             )
         )
 
-        self.ui.lb_search.addItems(self.load_companies_from_file("files/stock_search.txt"))
+        self.lb_search.addItems(self.load_companies_from_file("files/stock_search.txt"))
 
         # 보유 종목
 
-        self.ui.lb_hold.addItems(self.load_companies_from_file("files/stock_hold.txt"))
+        self.lb_hold.addItems(self.load_companies_from_file("files/stock_hold.txt"))
 
-        self.ui.btn2.clicked.connect(self.btncmd2)
-        self.ui.btn_del1.clicked.connect(self.btncmd_del1)
-        self.ui.btn_addint1.clicked.connect(
+        self.btn2.clicked.connect(self.btncmd2)
+        self.btn_del1.clicked.connect(self.btncmd_del1)
+        self.btn_addint1.clicked.connect(
             lambda: self.manage_stock_list(
                 "add",
-                self.ui.lb_int,
+                self.lb_int,
                 "files/stock_interest.txt",
-                self.ui.lb_hold.currentItem().text(),
+                self.lb_hold.currentItem().text(),
             )
         )
 
         # 관심 종목
 
-        self.ui.lb_int.addItems(self.load_companies_from_file("files/stock_interest.txt"))
+        self.lb_int.addItems(self.load_companies_from_file("files/stock_interest.txt"))
 
-        self.ui.btn3.clicked.connect(self.btncmd3)
-        self.ui.btn_del2.clicked.connect(self.btncmd_del2)
-        self.ui.btn_addhold1.clicked.connect(
+        self.btn3.clicked.connect(self.btncmd3)
+        self.btn_del2.clicked.connect(self.btncmd_del2)
+        self.btn_addhold1.clicked.connect(
             lambda: self.manage_stock_list(
                 "add",
-                self.ui.lb_hold,
+                self.lb_hold,
                 "files/stock_hold.txt",
-                self.ui.lb_int.currentItem().text(),
+                self.lb_int.currentItem().text(),
             )
         )
 
         # 종목 조회
-        self.ui.btn_find.clicked.connect(self.find_stock)
-        self.ui.btn_addhold2.clicked.connect(
+        self.btn_find.clicked.connect(self.find_stock)
+        self.btn_addhold2.clicked.connect(
             lambda: self.manage_stock_list(
-                "add", self.ui.lb_hold, "files/stock_hold.txt", self.ui.ent.text()
+                "add", self.lb_hold, "files/stock_hold.txt", self.ent.text()
             )
         )
-        self.ui.btn_addint2.clicked.connect(
+        self.btn_addint2.clicked.connect(
             lambda: self.manage_stock_list(
-                "add", self.ui.lb_int, "files/stock_interest.txt", self.ui.ent.text()
+                "add", self.lb_int, "files/stock_interest.txt", self.ent.text()
             )
         )
 
@@ -163,10 +171,10 @@ class MyMainWindow(QMainWindow):
 
     def update_specific_stock(self):
         try:
-            company = self.ui.ent_stock.text()
-            if self.ui.btn_period1.isChecked():
+            company = self.ent_stock.text()
+            if self.btn_period1.isChecked():
                 self.update_stock_price(company, 1)
-            elif self.ui.btn_period2.isChecked():
+            elif self.btn_period2.isChecked():
                 self.update_stock_price(company, 2)
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
@@ -200,10 +208,10 @@ class MyMainWindow(QMainWindow):
                 else stock_list[stock_list.len_code < 6].index
             )
             stock_list = stock_list.drop(idx)
-            self.ui.lb_search.clear()
+            self.lb_search.clear()
         elif nation == "all":
             self.run = True
-            self.ui.lb_search.clear()
+            self.lb_search.clear()
         elif nation == "stop":
             self.run = False
 
@@ -254,7 +262,7 @@ class MyMainWindow(QMainWindow):
                         and df.close.values[-1] > df.open.values[-1]
                     ) or (df.close.values[-1] < df.ENBOTTOM.values[-1]
                     and df.close.values[-1] > df.open.values[-1]):
-                        self.ui.lb_search.addItem(company)
+                        self.lb_search.addItem(company)
                         self.write_to_search_file(company)
                 except Exception as e:
                     print(str(e))
@@ -265,7 +273,7 @@ class MyMainWindow(QMainWindow):
         self.show_info(company)
 
     def btncmd(self):
-        company = self.ui.lb_search.currentItem().text()
+        company = self.lb_search.currentItem().text()
         self.update_and_show_stock(company)
 
     def manage_stock_list(self, action, listbox=None, filename=None, company=None):
@@ -288,23 +296,23 @@ class MyMainWindow(QMainWindow):
                 f.write("%s\n" % company)
 
     def btncmd2(self):
-        company = self.manage_stock_list("get", self.ui.lb_hold)
+        company = self.manage_stock_list("get", self.lb_hold)
         self.update_and_show_stock(company)
 
     def btncmd_del1(self):
-        self.ui.lb_hold.takeItem(self.ui.lb_hold.currentRow())
-        self.manage_stock_list("update", self.ui.lb_hold, "files/stock_hold.txt")
+        self.lb_hold.takeItem(self.lb_hold.currentRow())
+        self.manage_stock_list("update", self.lb_hold, "files/stock_hold.txt")
 
     def btncmd3(self):
-        company = self.manage_stock_list("get", self.ui.lb_int)
+        company = self.manage_stock_list("get", self.lb_int)
         self.update_and_show_stock(company)
 
     def btncmd_del2(self):
-        self.ui.lb_int.takeItem(self.ui.lb_int.currentRow())
-        self.manage_stock_list("update", self.ui.lb_int, "files/stock_interest.txt")
+        self.lb_int.takeItem(self.lb_int.currentRow())
+        self.manage_stock_list("update", self.lb_int, "files/stock_interest.txt")
 
     def find_stock(self):
-        company = self.ui.ent.text()
+        company = self.ent.text()
         db_updater = DBUpdater_new.DBUpdater()
         db_updater.update_daily_price("stop")
         time.sleep(0.2)
@@ -483,6 +491,10 @@ class MyMainWindow(QMainWindow):
 
             plt.subplots_adjust(hspace=0.05)
 
+            self.verticalLayout_2.removeWidget(self.imagelabel_3)
+            self.imagelabel_3.hide()
+            self.verticalLayout_2.addWidget(self.canvas)
+
             self.canvas.draw()
 
         except Exception as e:
@@ -513,12 +525,40 @@ class MyMainWindow(QMainWindow):
                 else:
                     raise ValueError(f"Unsupported country for company: {company}")
 
-                self.ui.webEngineView.load(QtCore.QUrl(stock_url))
+                self.webEngineView.load(QtCore.QUrl(stock_url))
 
         except Exception as e:
             print(f"Error in show_info: {str(e)}")
 
+class StdoutRedirect(QObject):
+    printOccur = pyqtSignal(str, str, name="print")
 
+    def __init__(self):
+        super().__init__()
+        # sys.stdout 및 sys.stderr의 원래 상태를 저장합니다.
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+
+    def stop(self):
+        # stdout과 stderr를 원래의 객체로 복원합니다.
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
+
+    def start(self):
+        # stdout과 stderr를 이 객체의 메서드로 대체합니다.
+        sys.stdout = self
+        sys.stderr = self
+
+    def write(self, message):
+        # 색상을 구분하지 않고 모든 메시지를 기본 색상으로 처리합니다.
+        # 필요에 따라 여기서 메시지의 종류(표준 출력 또는 에러)에 따라 색상을 지정할 수 있습니다.
+        self.printOccur.emit(message, "black")
+
+    def flush(self):
+        # flush 메서드가 호출될 때 특별히 수행할 작업이 없는 경우, 이를 빈 메서드로 두어 호환성을 유지합니다.
+        pass
+
+    
     
 if __name__ == "__main__":
     app = QApplication(sys.argv)
