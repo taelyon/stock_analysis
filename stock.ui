@@ -47,7 +47,7 @@
      <enum>QTabWidget::Rounded</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="tab">
      <property name="font">
@@ -971,7 +971,7 @@
     </widget>
     <widget class="QWidget" name="tab_2">
      <attribute name="title">
-      <string>Tab 2</string>
+      <string>백테스팅</string>
      </attribute>
      <widget class="QFrame" name="frame">
       <property name="geometry">
@@ -988,6 +988,17 @@
       <property name="frameShadow">
        <enum>QFrame::Raised</enum>
       </property>
+      <widget class="QWidget" name="">
+       <property name="geometry">
+        <rect>
+         <x>1</x>
+         <y>-1</y>
+         <width>1751</width>
+         <height>571</height>
+        </rect>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_7"/>
+      </widget>
      </widget>
      <widget class="QLabel" name="label">
       <property name="geometry">
