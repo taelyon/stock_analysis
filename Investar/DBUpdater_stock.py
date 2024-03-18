@@ -11,7 +11,7 @@ requests.packages.urllib3.disable_warnings()
 
 class DBUpdater:
     def __init__(self):
-        self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
+        self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8mb4')
 
         with self.conn.cursor() as curs:
             sql = """CREATE TABLE IF NOT EXISTS company_info (code VARCHAR(20), company VARCHAR(40), last_update 

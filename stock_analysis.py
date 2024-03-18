@@ -13,7 +13,6 @@ from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
 from PyQt5 import uic
 
-
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
 
@@ -27,7 +26,6 @@ class MyMainWindow(QMainWindow, ui):
         self.codes = {}
         self.run = True
 
-        # self.ui = MainWindow()
         self.setupUi(self)
         self.connect_buttons()
 
