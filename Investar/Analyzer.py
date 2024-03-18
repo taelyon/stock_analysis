@@ -3,19 +3,23 @@ import pymysql
 from datetime import datetime
 from datetime import timedelta
 import re
+from sqlalchemy import create_engine
 
 class MarketDB:
     def __init__(self):
-        self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
+        self.engine = create_engine('mysql+pymysql://root:taelyon@localhost/investar', echo=False)
+
+        # self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
         self.codes = {}
         self.get_comp_info()
 
     def __del__(self):
-        self.conn.close()
+        # self.conn.close()
+        pass
 
     def get_comp_info(self):
         sql = "SELECT * FROM company_info"
-        stock_list = pd.read_sql(sql, self.conn)
+        stock_list = pd.read_sql(sql, self.engine)
         for idx in range(len(stock_list)):
             self.codes[stock_list['code'].values[idx]] = stock_list['company'].values[idx]
         return stock_list
@@ -76,7 +80,7 @@ class MarketDB:
             print("ValueError: Code({}) doesn't exist.".format(code))
 
         sql = f"SELECT * FROM daily_price WHERE code = '{code}' and date >= '{start_date}' and date <= '{end_date}'"
-        df = pd.read_sql(sql, self.conn)
+        df = pd.read_sql(sql, self.engine)
         df.index = df['date']
         return df
 
