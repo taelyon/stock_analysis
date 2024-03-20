@@ -973,104 +973,150 @@
      <attribute name="title">
       <string>백테스팅</string>
      </attribute>
-     <widget class="QFrame" name="frame">
+     <widget class="QWidget" name="plot_widget" native="true">
       <property name="geometry">
        <rect>
         <x>60</x>
-        <y>160</y>
+        <y>210</y>
         <width>1751</width>
-        <height>571</height>
+        <height>521</height>
        </rect>
       </property>
-      <property name="frameShape">
-       <enum>QFrame::StyledPanel</enum>
-      </property>
-      <property name="frameShadow">
-       <enum>QFrame::Raised</enum>
-      </property>
-      <widget class="QWidget" name="layoutWidget1">
+      <widget class="QWidget" name="verticalLayoutWidget_4">
        <property name="geometry">
         <rect>
-         <x>1</x>
-         <y>-1</y>
+         <x>0</x>
+         <y>0</y>
          <width>1751</width>
-         <height>571</height>
+         <height>521</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_7"/>
       </widget>
      </widget>
-     <widget class="QLabel" name="label">
-      <property name="geometry">
-       <rect>
-        <x>60</x>
-        <y>30</y>
-        <width>111</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>11</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>매수 조건식 :</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-      </property>
-     </widget>
-     <widget class="QLabel" name="label_2">
-      <property name="geometry">
-       <rect>
-        <x>1030</x>
-        <y>30</y>
-        <width>111</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="font">
-       <font>
-        <pointsize>11</pointsize>
-       </font>
-      </property>
-      <property name="text">
-       <string>매도 조건식 :</string>
-      </property>
-      <property name="alignment">
-       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-      </property>
-     </widget>
-     <widget class="QLineEdit" name="lineEdit">
-      <property name="geometry">
-       <rect>
-        <x>60</x>
-        <y>60</y>
-        <width>781</width>
-        <height>71</height>
-       </rect>
-      </property>
-     </widget>
-     <widget class="QLineEdit" name="lineEdit_2">
-      <property name="geometry">
-       <rect>
-        <x>1030</x>
-        <y>60</y>
-        <width>781</width>
-        <height>71</height>
-       </rect>
-      </property>
-     </widget>
      <widget class="QTextBrowser" name="textBrowser">
       <property name="geometry">
        <rect>
-        <x>60</x>
-        <y>740</y>
-        <width>1751</width>
-        <height>231</height>
+        <x>100</x>
+        <y>760</y>
+        <width>1671</width>
+        <height>211</height>
        </rect>
       </property>
+     </widget>
+     <widget class="QWidget" name="layoutWidget3">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>100</y>
+        <width>1661</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_8">
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>매수 조건식 :</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="lineEditBuyCondition"/>
+       </item>
+       <item>
+        <widget class="QPushButton" name="buyConditionInputButton">
+         <property name="text">
+          <string>입 력</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="layoutWidget4">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>140</y>
+        <width>1661</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_9">
+       <item>
+        <widget class="QLabel" name="label_2">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>매도 조건식 :</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="lineEditSellCondition"/>
+       </item>
+       <item>
+        <widget class="QPushButton" name="sellConditionInputButton">
+         <property name="text">
+          <string>입 력</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="">
+      <property name="geometry">
+       <rect>
+        <x>101</x>
+        <y>51</y>
+        <width>461</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_7">
+       <item>
+        <widget class="QLabel" name="label_3">
+         <property name="font">
+          <font>
+           <pointsize>10</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>백테스팅 종목 :</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="lineEdit_stock"/>
+       </item>
+       <item>
+        <widget class="QDateEdit" name="dateEdit_start"/>
+       </item>
+       <item>
+        <widget class="QPushButton" name="BacktestingButton">
+         <property name="text">
+          <string>조 회</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </widget>
