@@ -1,6 +1,7 @@
 from threading import Thread
 from Investar import DBUpdater_new, Analyzer
 import pandas as pd
+import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from mplfinance.original_flavor import candlestick_ohlc
@@ -19,6 +20,50 @@ QtWidgets.QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
+
+class PortfolioOptimization:
+    def __init__(self, stock_list):
+        self.mk = Analyzer.MarketDB()
+        self.stocks = stock_list
+        self.df_port = pd.DataFrame()
+        # self.optimize_portfolio()
+
+    def optimize_portfolio(self):
+        for s in self.stocks:
+            self.df_port[s] = self.mk.get_daily_price(s, '2022-01-01')['close']
+         
+        daily_ret = self.df_port.pct_change(fill_method=None) 
+        annual_ret = daily_ret.mean() * 252
+        daily_cov = daily_ret.cov() 
+        annual_cov = daily_cov * 252
+
+        port_ret = [] 
+        port_risk = [] 
+        port_weights = []
+        sharpe_ratio = [] 
+
+        for _ in range(20000): 
+            weights = np.random.random(len(self.stocks)) 
+            weights /= np.sum(weights)
+
+            returns = np.dot(weights, annual_ret) 
+            risk = np.sqrt(np.dot(weights.T, np.dot(annual_cov, weights))) 
+            port_ret.append(returns) 
+            port_risk.append(risk) 
+            port_weights.append(weights)
+            sharpe_ratio.append(returns/risk)
+
+        portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
+        for i, s in enumerate(self.stocks): 
+            portfolio[s] = [weight[i] for weight in port_weights]
+
+        self.df_port = pd.DataFrame(portfolio) 
+        self.df_port = self.df_port[['Returns', 'Risk', 'Sharpe'] + [s for s in self.stocks]]
+        self.max_sharpe = self.df_port.loc[self.df_port['Sharpe'] == self.df_port['Sharpe'].max()]  # ③
+        self.min_risk = self.df_port.loc[self.df_port['Risk'] == self.df_port['Risk'].min()]  # ④
+        
+        return self.df_port, self.max_sharpe, self.min_risk
+       
 
 class MyStrategy(bt.Strategy):
     def __init__(self, text_browser, lineEditBuyCondition, lineEditSellCondition):
@@ -113,6 +158,8 @@ class MyMainWindow(QMainWindow):
 
         self.dateEdit_start.setDate(QtCore.QDate(2022, 1, 1))
 
+        self.optimize_button.clicked.connect(self.run_portfolio_optimization)
+
         # buy_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
         try:
             with open('files/buy_condition.txt', 'r') as file:
@@ -129,7 +176,60 @@ class MyMainWindow(QMainWindow):
         except Exception as e:
             print(f"Error reading sell_condition.txt: {e}")
 
+        try:
+            with open('files/stock_hold.txt', 'r', encoding='utf-8') as file:
+                stock_names = [line.strip() for line in file if line.strip()]
+                # 주식명을 쉼표로 연결합니다.
+                stocks_string = ', '.join(stock_names)
+                # QLineEdit에 설정합니다.
+                self.portfolio.setText(stocks_string)
+        except Exception as e:
+            print(f"Failed to load stock names: {e}")
+
+        # 시그널 슬롯 처리
         self.graphUpdated.connect(self.update_graph_ui)
+
+    def run_portfolio_optimization(self):
+        stock_names = self.portfolio.text().split(',')  # QLineEdit에서 종목명을 가져옵니다.
+        stock_names = [name.strip() for name in stock_names if name.strip()]  # 공백 제거
+
+        portfolio_optimization = PortfolioOptimization(stock_names)
+
+        result = portfolio_optimization.optimize_portfolio()  # 변경된 부분
+        if result is not None:
+            df_port, max_sharpe, min_risk = result
+
+            self.textBrowser.clear()  # 이전 출력 내용을 지웁니다.
+            max_sharpe_text = 'Max Sharpe Ratio:\n' + max_sharpe.to_string(index=False)
+            min_risk_text = '\nMin Risk:\n' + min_risk.to_string(index=False)
+            self.textBrowser.append(max_sharpe_text + '\n' + min_risk_text)
+            
+            fig = Figure()
+            canvas = FigureCanvas(fig)
+            ax = fig.add_subplot(111)
+
+            # 데이터로부터 색상 배열 생성
+            sharpe_array = df_port['Sharpe'].values
+            cmap = plt.cm.viridis
+            normalize = plt.Normalize(vmin=min(sharpe_array), vmax=max(sharpe_array))
+            colors = cmap(normalize(sharpe_array))
+
+            # # 그래프 그리기
+            ax.scatter(df_port['Risk'], df_port['Returns'], c=colors, edgecolors='k')
+            ax.scatter(x=max_sharpe['Risk'], y=max_sharpe['Returns'], c='r', marker='*', s=300)
+            ax.scatter(x=min_risk['Risk'], y=min_risk['Returns'], c='r', marker='X', s=200)
+            ax.set_title('Portfolio Optimization')
+            ax.set_xlabel('Risk')
+            ax.set_ylabel('Expected Returns')
+
+            # # verticalLayout_7에 그래프 추가
+            if hasattr(self, 'canvas_back'):
+                self.verticalLayout_7.removeWidget(self.canvas_back)
+                self.canvas_back.figure.clf()
+                self.canvas_back.close()
+            self.canvas_back = canvas  # 캔버스를 클래스 변수로 저장
+            self.verticalLayout_7.addWidget(self.canvas_back)
+            self.canvas_back.draw()
 
     def update_graph_ui(self, source):
 
@@ -275,6 +375,7 @@ class MyMainWindow(QMainWindow):
             self.canvas.draw()
 
         elif source == "display_graph":
+
             self.verticalLayout_7.addWidget(self.canvas_back)
             self.canvas_back.draw()
 
