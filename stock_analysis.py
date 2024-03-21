@@ -291,19 +291,21 @@ class MyMainWindow(QMainWindow):
         print("Sell condition saved.")
 
     def start_backtesting(self):
-        # 이전 결과 및 로그를 지우는 코드
-        self.textBrowser.clear()  # 텍스트 브라우저의 내용을 비웁니다.
-          
-        self.company = self.lineEdit_stock.text()
-        self.start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
+        try:
+            self.textBrowser.clear()  # 텍스트 브라우저의 내용을 비웁니다.
+            
+            self.company = self.lineEdit_stock.text()
+            self.start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
 
-        # 백테스팅 설정 및 실행
-        cerebro = self.setup_cerebro()
-        self.display_portfolio_value(cerebro, 'Initial')
-        cerebro.run()
-        self.display_portfolio_value(cerebro, 'Final')
+            # 백테스팅 설정 및 실행
+            cerebro = self.setup_cerebro()
+            self.display_portfolio_value(cerebro, 'Initial')
+            cerebro.run()
+            self.display_portfolio_value(cerebro, 'Final')
 
-        self.display_graph(cerebro)
+            self.display_graph(cerebro)
+        except Exception as e:
+            print(str(e))
 
     def setup_cerebro(self):
         cerebro = bt.Cerebro()
