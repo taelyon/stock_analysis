@@ -557,7 +557,7 @@ class MyMainWindow(QMainWindow):
                         df.RSI.values[-1] < 30
                         and df.macdhist.values[-1] > df.macdhist.values[-2]
                         and df.macd.values[-1] > df.macd.values[-2]
-                        and df.close.values[-1] > df.open.values[-1] and df.volume.values[-1] > 10000) or (df.close.values[-1] < df.ENBOTTOM.values[-1] and df.close.values[-1] > df.open.values[-1] and df.volume.values[-1] > 10000):
+                        and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()) or (df.close.values[-1] < df.ENBOTTOM.values[-1] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()):
                         self.lb_search.addItem(company)
                         self.write_to_search_file(company)
                 except Exception as e:
@@ -655,10 +655,7 @@ class MyMainWindow(QMainWindow):
             self.df = self.df.assign(fast_k=fast_k, slow_d=slow_d)
             self.df = self.df[-80:]
             self.ohlc = self.df[["number", "open", "high", "low", "close"]]
-            # self.df['len_code'] = self.df.code.str.len()
-
-
-            
+            # self.df['len_code'] = self.df.code.str.len()          
 
             self.graphUpdated.emit("show_graph")
 
