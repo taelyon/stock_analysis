@@ -26,7 +26,6 @@ class PortfolioOptimization:
         self.mk = Analyzer.MarketDB()
         self.stocks = stock_list
         self.df_port = pd.DataFrame()
-        # self.optimize_portfolio()
 
     def optimize_portfolio(self):
         for s in self.stocks:
@@ -74,6 +73,10 @@ class MyStrategy(bt.Strategy):
         self.dataclose = self.datas[0].close
         self.dataopen = self.datas[0].open
         self.order = None
+        self.buyprice = None
+        self.buycomm = None
+        self.initial_cash = self.broker.getvalue()
+        self.initial_price = self.dataclose[0]  # 최초 주가
         self.set_indicators()
 
     def set_indicators(self):
@@ -85,22 +88,25 @@ class MyStrategy(bt.Strategy):
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
             return
-        if order.status == order.Completed: 
-            action = 'BUY' if order.isbuy() else 'SELL'
-            self.log(f'{action} : 주가 {order.executed.price:,.0f}, '
-                     f'수량 {order.executed.size:,.0f}, '
-                     f'수수료 {order.executed.comm:,.0f}, '
-                     f'자산 {self.broker.getvalue():,.0f}')
+        if order.status in [order.Completed]:
             if order.isbuy():
+                self.log(f'BUY  : 주가 {order.executed.price:,.0f}, '
+                         f'수량 {order.executed.size:,.0f}, '
+                         f'수수료 {order.executed.comm:,.0f}, '
+                         f'자산 {self.broker.getvalue():,.0f}')
                 self.buyprice = order.executed.price
                 self.buycomm = order.executed.comm
+            else:
+                # Sell 이벤트 발생 시, 구매 대비 수익률 계산
+                profit_ratio = ((order.executed.price - self.buyprice) / self.buyprice) * 100
+                self.log(f'SELL : 주가 {order.executed.price:,.0f}, '
+                         f'수량 {order.executed.size:,.0f}, '
+                         f'수수료 {order.executed.comm:,.0f}, '
+                         f'자산 {self.broker.getvalue():,.0f}, '
+                         f'수익률 {profit_ratio:.2f}%')  # 수익률 출력
             self.bar_executed = len(self)
-        elif order.status == order.Canceled:
-            self.log('ORDER CANCELED')
-        elif order.status == order.Margin:
-            self.log('ORDER MARGIN')
-        elif order.status == order.Rejected:
-            self.log('ORDER REJECTED')
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            self.log(f'ORDER {order.Status}: {order.info}')
         self.order = None
 
     def next(self):
@@ -194,15 +200,41 @@ class MyMainWindow(QMainWindow):
         stock_names = [name.strip() for name in stock_names if name.strip()]  # 공백 제거
 
         portfolio_optimization = PortfolioOptimization(stock_names)
+        result = portfolio_optimization.optimize_portfolio()
 
-        result = portfolio_optimization.optimize_portfolio()  # 변경된 부분
         if result is not None:
             df_port, max_sharpe, min_risk = result
 
+            max_sharpe_percent = max_sharpe.copy()  # 원본 데이터 수정 방지
+            for column in max_sharpe_percent.columns:
+                if column not in ['Returns', 'Risk', 'Sharpe']:
+                    max_sharpe_percent[column] = max_sharpe_percent[column].apply(lambda x: f"{x * 100:.2f}%")  # 종목 비중을 % 형태로 변경
+                elif column == 'Returns':
+                    max_sharpe_percent[column] = f"{max_sharpe_percent[column].iloc[0] * 100:.2f}%"  # 수익률을 % 형태로 변경
+
+            min_risk_percent = min_risk.copy()  # 원본 데이터 수정 방지
+            for column in min_risk_percent.columns:
+                if column not in ['Returns', 'Risk', 'Sharpe']:
+                    min_risk_percent[column] = min_risk_percent[column].apply(lambda x: f"{x * 100:.2f}%")  # 종목 비중을 % 형태로 변경
+                elif column == 'Returns':
+                    min_risk_percent[column] = f"{min_risk_percent[column].iloc[0] * 100:.2f}%"  # 수익률을 % 형태로 변경
+
+            # 'Risk'와 'Sharpe' 값의 포맷을 소숫점 네 번째 자리까지로 변경
+            max_sharpe_percent['Risk'] = max_sharpe_percent['Risk'].round(3)
+            max_sharpe_percent['Sharpe'] = max_sharpe_percent['Sharpe'].round(3)
+            min_risk_percent['Risk'] = min_risk_percent['Risk'].round(3)
+            min_risk_percent['Sharpe'] = min_risk_percent['Sharpe'].round(3)
+
+            max_sharpe_percent.insert(max_sharpe_percent.columns.get_loc('Sharpe') + 1, ' ', '')  # max_sharpe에 빈 열 추가
+            min_risk_percent.insert(min_risk_percent.columns.get_loc('Sharpe') + 1, ' ', '')  # min_risk에 빈 열 추가
+
+            max_sharpe_html = max_sharpe_percent.to_html(index=False, border=0)
+            min_risk_html = min_risk_percent.to_html(index=False, border=0)
+
             self.textBrowser.clear()  # 이전 출력 내용을 지웁니다.
-            max_sharpe_text = 'Max Sharpe Ratio:\n' + max_sharpe.to_string(index=False)
-            min_risk_text = '\nMin Risk:\n' + min_risk.to_string(index=False)
-            self.textBrowser.append(max_sharpe_text + '\n' + min_risk_text)
+            max_sharpe_text = '<b>Max Sharpe Ratio:</b>' + max_sharpe_html
+            min_risk_text = '<b>Min Risk:</b>' + min_risk_html
+            self.textBrowser.setHtml(max_sharpe_text + '<br>' '<br>'+ min_risk_text)
             
             fig = Figure()
             canvas = FigureCanvas(fig)
@@ -399,35 +431,36 @@ class MyMainWindow(QMainWindow):
             self.start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
 
             # 백테스팅 설정 및 실행
-            cerebro = self.setup_cerebro()
-            self.display_portfolio_value(cerebro, 'Initial')
+            cerebro = bt.Cerebro()
+            cerebro.addstrategy(MyStrategy, self.textBrowser, self.lineEditBuyCondition, self.lineEditSellCondition)
+
+            mk = Analyzer.MarketDB()
+            df = mk.get_daily_price(self.company, self.start_date)
+            df.date = pd.to_datetime(df.date)
+
+            data = bt.feeds.PandasData(dataname=df, datetime='date')
+            cerebro.adddata(data)
+            initial_cash = 10000000
+            cerebro.broker.setcash(initial_cash)
+            cerebro.broker.setcommission(commission=0.0014)
+            cerebro.addsizer(bt.sizers.PercentSizer, percents=90)
+
+            initial_portfolio_value = cerebro.broker.getvalue()
+            self.textBrowser.append(f'Initial Portfolio Value : {initial_portfolio_value:,.0f} KRW')
             cerebro.run()
-            self.display_portfolio_value(cerebro, 'Final')
+            final_portfolio_value = cerebro.broker.getvalue()
+            self.textBrowser.append(f'Final Portfolio Value : {final_portfolio_value:,.0f} KRW')
+            self.textBrowser.append(f'자산수익률 : {((final_portfolio_value - initial_portfolio_value) / initial_portfolio_value) * 100:.2f}%')
+
+            # 최초 투자일 대비 마지막 날 주가 변동률
+            initial_price = df['close'].iloc[0]
+            final_price = df['close'].iloc[-1]
+            self.textBrowser.append(f'단순주가수익률 : {((final_price - initial_price) / initial_price) * 100:.2f}%')
 
             self.display_graph(cerebro)
+
         except Exception as e:
             print(str(e))
-
-    def setup_cerebro(self):
-        cerebro = bt.Cerebro()
-        cerebro.addstrategy(MyStrategy, self.textBrowser, self.lineEditBuyCondition, self.lineEditSellCondition)
-        df = self.fetch_stock_data()
-        data = bt.feeds.PandasData(dataname=df, datetime='date')
-        cerebro.adddata(data)
-        cerebro.broker.setcash(10000000)
-        cerebro.broker.setcommission(commission=0.0014)
-        cerebro.addsizer(bt.sizers.PercentSizer, percents=90)
-        return cerebro
-
-    def fetch_stock_data(self):
-        mk = Analyzer.MarketDB()
-        df = mk.get_daily_price(self.company, self.start_date)
-        df.date = pd.to_datetime(df.date)
-        return df
-
-    def display_portfolio_value(self, cerebro, timing):
-        value = f'{cerebro.broker.getvalue():,.0f} KRW'
-        self.textBrowser.append(f'{timing} Portfolio Value : {value}')
 
     def display_graph(self, cerebro):
         # 이전 그래프를 포함하는 Canvas를 제거
