@@ -31,7 +31,7 @@ class PortfolioOptimization:
         for s in self.stocks:
             self.df_port[s] = self.mk.get_daily_price(s, '2022-01-01')['close']
          
-        daily_ret = self.df_port.pct_change(fill_method=None) 
+        daily_ret = self.df_port.pct_change() 
         annual_ret = daily_ret.mean() * 252
         daily_cov = daily_ret.cov() 
         annual_cov = daily_cov * 252
@@ -41,20 +41,18 @@ class PortfolioOptimization:
         port_weights = []
         sharpe_ratio = [] 
 
-        for _ in range(20000): 
-            weights = np.random.random(len(self.stocks)) 
-            weights /= np.sum(weights)
+        # 포트폴리오 리턴, 리스크, 비중 저장을 위한 리스트
+        port_weights = np.random.random((20000, len(self.stocks)))
+        port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
 
-            returns = np.dot(weights, annual_ret) 
-            risk = np.sqrt(np.dot(weights.T, np.dot(annual_cov, weights))) 
-            port_ret.append(returns) 
-            port_risk.append(risk) 
-            port_weights.append(weights)
-            sharpe_ratio.append(returns/risk)
+        # 포트폴리오의 연간 수익, 리스크, 샤프 비율 계산
+        port_ret = np.dot(port_weights, annual_ret)
+        port_risk = np.sqrt(np.einsum('ij,ji->i', port_weights @ annual_cov, port_weights.T))
+        sharpe_ratio = port_ret / port_risk
 
         portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
         for i, s in enumerate(self.stocks): 
-            portfolio[s] = [weight[i] for weight in port_weights]
+            portfolio[s] = port_weights[:, i]
 
         self.df_port = pd.DataFrame(portfolio) 
         self.df_port = self.df_port[['Returns', 'Risk', 'Sharpe'] + [s for s in self.stocks]]
@@ -601,7 +599,8 @@ class MyMainWindow(QMainWindow):
             db_updater.ric_code()
             df = db_updater.read_yfinance(code, period)
         # df = df.dropna()
-        db_updater.replace_into_db(df, 0, code, company)
+        if df is not None:
+            db_updater.replace_into_db(df, 0, code, company)
 
     def update_specific_stock(self):
         try:
@@ -700,7 +699,7 @@ class MyMainWindow(QMainWindow):
                     print(str(e))
 
     def update_and_show_stock(self, company):
-        self.update_stock_price(company, 1)
+        # self.update_stock_price(company, 1)
         Thread(target=self.show_graph, args=(company,), daemon=True).start()
         self.show_info(company)
 
