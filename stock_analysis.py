@@ -14,6 +14,8 @@ from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
 import backtrader as bt
 from matplotlib.figure import Figure
+import matplotlib
+matplotlib.use('Agg')
 
 
 QtWidgets.QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
