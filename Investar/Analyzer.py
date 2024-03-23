@@ -5,12 +5,11 @@ from datetime import timedelta
 import re
 from sqlalchemy import create_engine
 
-
 class MarketDB:
     def __init__(self):
-        self.engine = create_engine("mysql+pymysql://root:taelyon@localhost/investar", echo=False)
+        self.engine = create_engine('mysql+pymysql://root:taelyon@localhost/investar', echo=False)
 
-        # self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8mb4')
+        # self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
         self.codes = {}
         self.get_comp_info()
 
