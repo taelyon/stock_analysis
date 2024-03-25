@@ -83,6 +83,8 @@ class MyStrategy(bt.Strategy):
         self.rsi = bt.indicators.RSI_SMA(self.data.close, period=14)
         self.ema5 = bt.indicators.EMA(self.data.close, period=5)
         self.ema10 = bt.indicators.EMA(self.data.close, period=10)
+        self.ema20 = bt.indicators.EMA(self.data.close, period=20)
+        self.ema60 = bt.indicators.EMA(self.data.close, period=60)
         self.macdhist = bt.indicators.MACDHisto(self.data.close)
 
     def notify_order(self, order):
