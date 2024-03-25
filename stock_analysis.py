@@ -701,7 +701,7 @@ class MyMainWindow(QMainWindow):
                     print(str(e))
 
     def update_and_show_stock(self, company):
-        # self.update_stock_price(company, 1)
+        self.update_stock_price(company, 1)
         Thread(target=self.show_graph, args=(company,), daemon=True).start()
         self.show_info(company)
 

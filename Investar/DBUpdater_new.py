@@ -270,9 +270,9 @@ class DBUpdater:
                     df = self.read_yfinance(code, 1)
                 elif nation == 'all':
                     if len(code) >= 6:
-                        df = self.read_naver(code, 2)  # For initial run, change to 2 to update
+                        df = self.read_naver(code, 1)  # For initial run, change to 2 to update
                     else:
-                        df = self.read_yfinance(code, 2)  # For initial run, change to 2 to update
+                        df = self.read_yfinance(code, 1)  # For initial run, change to 2 to update
                 else:
                     continue  # Skip if none of the conditions match
 
