@@ -472,7 +472,7 @@ class MyMainWindow(QMainWindow):
             self.canvas_back.close()
 
         # cerebro로부터 새로운 그래프를 생성합니다.
-        figures = cerebro.plot(style='candlestick')
+        figures = cerebro.plot(style='candlestick', barup='green', fmt_x_ticks='%Y-%m-%d')
         figure = figures[0][0]
         self.canvas_back = FigureCanvas(figure)
         self.graphUpdated.emit("display_graph")
