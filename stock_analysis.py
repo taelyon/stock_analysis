@@ -43,23 +43,30 @@ class PortfolioOptimization:
         port_weights = []
         sharpe_ratio = [] 
 
-        # 포트폴리오 리턴, 리스크, 비중 저장을 위한 리스트
-        port_weights = np.random.random((20000, len(self.stocks)))
-        port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
+        # 단일 종목인 경우 처리
+        if len(self.stocks) == 1:
+            # 단일 종목이므로, 모든 포트폴리오는 동일하게 처리됩니다.
+            port_ret = [annual_ret[0]]  # 단일 종목의 연간 수익
+            port_risk = [np.sqrt(annual_cov.iloc[0, 0])]  # 단일 종목의 리스크
+            port_weights = [[1]]  # 종목 비중은 100%
+            sharpe_ratio = [port_ret[0] / port_risk[0]]  # 샤프 비율
+        else:
+            # 여러 종목인 경우 처리
+            port_weights = np.random.random((20000, len(self.stocks)))
+            port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
 
-        # 포트폴리오의 연간 수익, 리스크, 샤프 비율 계산
-        port_ret = np.dot(port_weights, annual_ret)
-        port_risk = np.sqrt(np.einsum('ij,ji->i', port_weights @ annual_cov, port_weights.T))
-        sharpe_ratio = port_ret / port_risk
+            port_ret = np.dot(port_weights, annual_ret)
+            port_risk = np.sqrt(np.einsum('ij,ji->i', port_weights @ annual_cov, port_weights.T))
+            sharpe_ratio = port_ret / port_risk
 
         portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
         for i, s in enumerate(self.stocks): 
-            portfolio[s] = port_weights[:, i]
+            portfolio[s] = [weight[i] for weight in port_weights]
 
         self.df_port = pd.DataFrame(portfolio) 
         self.df_port = self.df_port[['Returns', 'Risk', 'Sharpe'] + [s for s in self.stocks]]
-        self.max_sharpe = self.df_port.loc[self.df_port['Sharpe'] == self.df_port['Sharpe'].max()]  # ③
-        self.min_risk = self.df_port.loc[self.df_port['Risk'] == self.df_port['Risk'].min()]  # ④
+        self.max_sharpe = self.df_port.loc[self.df_port['Sharpe'] == self.df_port['Sharpe'].max()]
+        self.min_risk = self.df_port.loc[self.df_port['Risk'] == self.df_port['Risk'].min()]
         
         return self.df_port, self.max_sharpe, self.min_risk
        
@@ -159,6 +166,7 @@ class MyMainWindow(QMainWindow):
         # Backtesting 버튼 클릭 시그널에 메서드 연결
         self.BacktestingButton.clicked.connect(self.start_backtesting)
         self.lineEdit_stock.returnPressed.connect(self.start_backtesting)
+        self.portfolio.returnPressed.connect(self.run_portfolio_optimization)
 
         # 버튼 클릭 시그널에 메서드 연결
         self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
