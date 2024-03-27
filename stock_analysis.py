@@ -466,6 +466,7 @@ class MyMainWindow(QMainWindow):
 
             # Display initial portfolio value
             initial_portfolio_value = cerebro.broker.getvalue()
+            initial_price = df['close'].iloc[0]
             self.textBrowser.append(f'Initial Portfolio Value : {initial_portfolio_value:,.0f} KRW')
             cerebro.run()
             
@@ -479,6 +480,7 @@ class MyMainWindow(QMainWindow):
             if not df_filtered.empty:
                 initial_price = df_filtered['close'].iloc[0]
                 final_price = df_filtered['close'].iloc[-1]
+                self.textBrowser.append(f'최초 주가 : {initial_price:,.0f}, 최종 주가 : {final_price:,.0f}')
                 self.textBrowser.append(f'단순주가수익률 : {((final_price - initial_price) / initial_price) * 100:.2f}%')
 
             self.display_graph(cerebro)
