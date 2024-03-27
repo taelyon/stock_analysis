@@ -9,6 +9,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import sys
 import os
 import time
+from datetime import datetime, timedelta
 from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
@@ -172,7 +173,7 @@ class MyMainWindow(QMainWindow):
         self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
         self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
 
-        self.dateEdit_start.setDate(QtCore.QDate(2022, 1, 1))
+        self.dateEdit_start.setDate(QtCore.QDate(2023, 1, 1))
 
         self.optimize_button.clicked.connect(self.run_portfolio_optimization)
 
@@ -435,17 +436,25 @@ class MyMainWindow(QMainWindow):
 
     def start_backtesting(self):
         try:
-            self.textBrowser.clear()  # 텍스트 브라우저의 내용을 비웁니다.
-            
-            self.company = self.lineEdit_stock.text()
-            self.start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
+            self.textBrowser.clear()  # Clear the text browser content.
 
-            # 백테스팅 설정 및 실행
+            # Set the backtesting parameters
+            self.company = self.lineEdit_stock.text()
+            original_start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
+            
+            # Adjust start date for additional data to warm-up indicators (e.g., 100 days earlier)
+            adjusted_start_date = self.dateEdit_start.date().addDays(-100).toString("yyyy-MM-dd")  # Assuming 100 days for indicator warm-up
+
+            # Backtesting setup and execution
             cerebro = bt.Cerebro()
-            cerebro.addstrategy(MyStrategy, self.textBrowser, self.lineEditBuyCondition, self.lineEditSellCondition)
+            cerebro.addstrategy(
+                MyStrategy,
+                self.textBrowser,
+                self.lineEditBuyCondition,
+                self.lineEditSellCondition)
 
             mk = Analyzer.MarketDB()
-            df = mk.get_daily_price(self.company, self.start_date)
+            df = mk.get_daily_price(self.company, adjusted_start_date)  # Use adjusted start date
             df.date = pd.to_datetime(df.date)
 
             data = bt.feeds.PandasData(dataname=df, datetime='date')
@@ -455,22 +464,28 @@ class MyMainWindow(QMainWindow):
             cerebro.broker.setcommission(commission=0.0014)
             cerebro.addsizer(bt.sizers.PercentSizer, percents=90)
 
+            # Display initial portfolio value
             initial_portfolio_value = cerebro.broker.getvalue()
             self.textBrowser.append(f'Initial Portfolio Value : {initial_portfolio_value:,.0f} KRW')
             cerebro.run()
+            
+            # Display final portfolio value
             final_portfolio_value = cerebro.broker.getvalue()
             self.textBrowser.append(f'Final Portfolio Value : {final_portfolio_value:,.0f} KRW')
-            self.textBrowser.append(f'자산수익률 : {((final_portfolio_value - initial_portfolio_value) / initial_portfolio_value) * 100:.2f}%')
+            self.textBrowser.append(f'자산투자수익률 : {((final_portfolio_value - initial_portfolio_value) / initial_portfolio_value) * 100:.2f}%')
 
-            # 최초 투자일 대비 마지막 날 주가 변동률
-            initial_price = df['close'].iloc[0]
-            final_price = df['close'].iloc[-1]
-            self.textBrowser.append(f'단순주가수익률 : {((final_price - initial_price) / initial_price) * 100:.2f}%')
+            # Display price return since the original start date
+            df_filtered = df[df['date'] >= pd.to_datetime(original_start_date)]  # Filter to original start date
+            if not df_filtered.empty:
+                initial_price = df_filtered['close'].iloc[0]
+                final_price = df_filtered['close'].iloc[-1]
+                self.textBrowser.append(f'단순주가수익률 : {((final_price - initial_price) / initial_price) * 100:.2f}%')
 
             self.display_graph(cerebro)
 
         except Exception as e:
             print(str(e))
+
 
     def display_graph(self, cerebro):
         # 이전 그래프를 포함하는 Canvas를 제거
