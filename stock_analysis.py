@@ -164,45 +164,6 @@ class MyMainWindow(QMainWindow):
         self._stdout.start()
         self._stdout.printOccur.connect(lambda x: self._append_text(x))
 
-        # Backtesting 버튼 클릭 시그널에 메서드 연결
-        self.BacktestingButton.clicked.connect(self.start_backtesting)
-        self.lineEdit_stock.returnPressed.connect(self.start_backtesting)
-        self.portfolio.returnPressed.connect(self.run_portfolio_optimization)
-
-        # 버튼 클릭 시그널에 메서드 연결
-        self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
-        self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
-
-        self.dateEdit_start.setDate(QtCore.QDate(2023, 1, 1))
-
-        self.optimize_button.clicked.connect(self.run_portfolio_optimization)
-
-        # buy_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
-        try:
-            with open('files/buy_condition.txt', 'r') as file:
-                buy_condition_text = file.read().strip()
-                self.lineEditBuyCondition.setText(buy_condition_text)
-        except Exception as e:
-            print(f"Error reading buy_condition.txt: {e}")
-
-        # sell_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
-        try:
-            with open('files/sell_condition.txt', 'r') as file:
-                sell_condition_text = file.read().strip()
-                self.lineEditSellCondition.setText(sell_condition_text)
-        except Exception as e:
-            print(f"Error reading sell_condition.txt: {e}")
-
-        try:
-            with open('files/stock_hold.txt', 'r', encoding='utf-8') as file:
-                stock_names = [line.strip() for line in file if line.strip()]
-                # 주식명을 쉼표로 연결합니다.
-                stocks_string = ', '.join(stock_names)
-                # QLineEdit에 설정합니다.
-                self.portfolio.setText(stocks_string)
-        except Exception as e:
-            print(f"Failed to load stock names: {e}")
-
         # 시그널 슬롯 처리
         self.graphUpdated.connect(self.update_graph_ui)
 
@@ -576,16 +537,55 @@ class MyMainWindow(QMainWindow):
 
         # 종목 조회
         self.btn_find.clicked.connect(self.find_stock)
+        self.le_ent.returnPressed.connect(self.find_stock)
         self.btn_addhold2.clicked.connect(
             lambda: self.manage_stock_list(
-                "add", self.lb_hold, "files/stock_hold.txt", self.ent.text()
+                "add", self.lb_hold, "files/stock_hold.txt", self.le_ent.text()
             )
         )
         self.btn_addint2.clicked.connect(
             lambda: self.manage_stock_list(
-                "add", self.lb_int, "files/stock_interest.txt", self.ent.text()
+                "add", self.lb_int, "files/stock_interest.txt", self.le_ent.text()
             )
         )
+
+        # Backtesting 버튼 클릭 시그널에 메서드 연결
+        self.BacktestingButton.clicked.connect(self.start_backtesting)
+        self.lineEdit_stock.returnPressed.connect(self.start_backtesting)
+        self.portfolio.returnPressed.connect(self.run_portfolio_optimization)
+
+        # 버튼 클릭 시그널에 메서드 연결
+        self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
+        self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
+        
+        self.dateEdit_start.setDate(QtCore.QDate(2023, 1, 1))
+        self.optimize_button.clicked.connect(self.run_portfolio_optimization)
+
+        # buy_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
+        try:
+            with open('files/buy_condition.txt', 'r') as file:
+                buy_condition_text = file.read().strip()
+                self.lineEditBuyCondition.setText(buy_condition_text)
+        except Exception as e:
+            print(f"Error reading buy_condition.txt: {e}")
+
+        # sell_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
+        try:
+            with open('files/sell_condition.txt', 'r') as file:
+                sell_condition_text = file.read().strip()
+                self.lineEditSellCondition.setText(sell_condition_text)
+        except Exception as e:
+            print(f"Error reading sell_condition.txt: {e}")
+
+        try:
+            with open('files/stock_hold.txt', 'r', encoding='utf-8') as file:
+                stock_names = [line.strip() for line in file if line.strip()]
+                # 주식명을 쉼표로 연결합니다.
+                stocks_string = ', '.join(stock_names)
+                # QLineEdit에 설정합니다.
+                self.portfolio.setText(stocks_string)
+        except Exception as e:
+            print(f"Failed to load stock names: {e}")
 
     def start_thread(self, func, *args):
         Thread(target=func, args=args, daemon=True).start()
@@ -772,13 +772,16 @@ class MyMainWindow(QMainWindow):
         self.manage_stock_list("update", self.lb_int, "files/stock_interest.txt")
 
     def find_stock(self):
-        company = self.ent.text()
-        db_updater = DBUpdater_new.DBUpdater()
-        db_updater.update_daily_price("stop")
-        time.sleep(0.2)
-        self.update_stock_price(company, 1)
-        Thread(target=self.show_graph, args=(company,), daemon=True).start()
-        self.show_info(company)
+        try:
+            company = self.le_ent.text()
+            db_updater = DBUpdater_new.DBUpdater()
+            db_updater.update_daily_price("stop")
+            time.sleep(0.2)
+            self.update_stock_price(company, 1)
+            Thread(target=self.show_graph, args=(company,), daemon=True).start()
+            self.show_info(company)
+        except Exception as e:
+            print(str(e))
 
     # 그래프
 

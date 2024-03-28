@@ -48,7 +48,6 @@
     </property>
     <property name="currentIndex">
      <number>0</number>
-     <number>0</number>
     </property>
     <widget class="QWidget" name="tab">
      <property name="font">
@@ -567,7 +566,7 @@
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_6">
          <item>
-          <widget class="QLineEdit" name="ent">
+          <widget class="QLineEdit" name="le_ent">
            <property name="enabled">
             <bool>true</bool>
            </property>
