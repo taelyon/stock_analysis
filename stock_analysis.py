@@ -18,128 +18,10 @@ from matplotlib.figure import Figure
 import matplotlib
 matplotlib.use('Agg')
 
-
 QtWidgets.QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
 
 pd.set_option("display.max_rows", None)
 pd.set_option("display.max_columns", None)
-
-class PortfolioOptimization:
-    def __init__(self, stock_list):
-        self.mk = Analyzer.MarketDB()
-        self.stocks = stock_list
-        self.df_port = pd.DataFrame()
-
-    def optimize_portfolio(self):
-        for s in self.stocks:
-            self.df_port[s] = self.mk.get_daily_price(s, '2022-01-01')['close']
-         
-        daily_ret = self.df_port.pct_change() 
-        annual_ret = daily_ret.mean() * 252
-        daily_cov = daily_ret.cov() 
-        annual_cov = daily_cov * 252
-
-        port_ret = [] 
-        port_risk = [] 
-        port_weights = []
-        sharpe_ratio = [] 
-
-        # 단일 종목인 경우 처리
-        if len(self.stocks) == 1:
-            # 단일 종목이므로, 모든 포트폴리오는 동일하게 처리됩니다.
-            port_ret = [annual_ret[0]]  # 단일 종목의 연간 수익
-            port_risk = [np.sqrt(annual_cov.iloc[0, 0])]  # 단일 종목의 리스크
-            port_weights = [[1]]  # 종목 비중은 100%
-            sharpe_ratio = [port_ret[0] / port_risk[0]]  # 샤프 비율
-        else:
-            # 여러 종목인 경우 처리
-            port_weights = np.random.random((20000, len(self.stocks)))
-            port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
-
-            port_ret = np.dot(port_weights, annual_ret)
-            port_risk = np.sqrt(np.einsum('ij,ji->i', port_weights @ annual_cov, port_weights.T))
-            sharpe_ratio = port_ret / port_risk
-
-        portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
-        for i, s in enumerate(self.stocks): 
-            portfolio[s] = [weight[i] for weight in port_weights]
-
-        self.df_port = pd.DataFrame(portfolio) 
-        self.df_port = self.df_port[['Returns', 'Risk', 'Sharpe'] + [s for s in self.stocks]]
-        self.max_sharpe = self.df_port.loc[self.df_port['Sharpe'] == self.df_port['Sharpe'].max()]
-        self.min_risk = self.df_port.loc[self.df_port['Risk'] == self.df_port['Risk'].min()]
-        
-        return self.df_port, self.max_sharpe, self.min_risk
-       
-
-class MyStrategy(bt.Strategy):
-    def __init__(self, text_browser, lineEditBuyCondition, lineEditSellCondition):
-        self.text_browser = text_browser
-        self.lineEditBuy = lineEditBuyCondition
-        self.lineEditSell = lineEditSellCondition  # QLineEdit 위젯 전달
-
-        self.dataclose = self.datas[0].close
-        self.dataopen = self.datas[0].open
-        self.order = None
-        self.buyprice = None
-        self.buycomm = None
-        self.initial_cash = self.broker.getvalue()
-        self.initial_price = self.dataclose[0]  # 최초 주가
-        self.set_indicators()
-
-    def set_indicators(self):
-        self.rsi = bt.indicators.RSI(self.data.close, period=14)
-        self.ema5 = bt.indicators.EMA(self.data.close, period=5)
-        self.ema10 = bt.indicators.EMA(self.data.close, period=10)
-        self.ema20 = bt.indicators.EMA(self.data.close, period=20)
-        self.ema60 = bt.indicators.EMA(self.data.close, period=60)
-        self.macdhist = bt.indicators.MACDHisto(self.data.close)
-
-    def notify_order(self, order):
-        if order.status in [order.Submitted, order.Accepted]:
-            return
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.log(f'BUY  : 주가 {order.executed.price:,.0f}, '
-                         f'수량 {order.executed.size:,.0f}, '
-                         f'수수료 {order.executed.comm:,.0f}, '
-                         f'자산 {self.broker.getvalue():,.0f}')
-                self.buyprice = order.executed.price
-                self.buycomm = order.executed.comm
-            else:
-                # Sell 이벤트 발생 시, 구매 대비 수익률 계산
-                profit_ratio = ((order.executed.price - self.buyprice) / self.buyprice) * 100
-                self.log(f'SELL : 주가 {order.executed.price:,.0f}, '
-                         f'수량 {order.executed.size:,.0f}, '
-                         f'수수료 {order.executed.comm:,.0f}, '
-                         f'자산 {self.broker.getvalue():,.0f}, '
-                         f'수익률 {profit_ratio:.2f}%')  # 수익률 출력
-            self.bar_executed = len(self)
-        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            self.log(f'ORDER {order.Status}: {order.info}')
-        self.order = None
-
-    def next(self):
-        if not self.position:
-            if self.buy_condition():
-                self.order = self.buy()
-        else:
-            if self.sell_condition():
-                self.order = self.sell()
-
-    def buy_condition(self):
-        condition_text = self.lineEditBuy.text()
-        return eval(condition_text)
-
-    def sell_condition(self):
-        condition_text = self.lineEditSell.text()
-        # 안전한 방법으로 문자열을 조건으로 변환 (여기서는 예시로 eval 사용)
-        return eval(condition_text)
-
-    def log(self, txt, dt=None):
-        dt = dt or self.datas[0].datetime.date(0)
-        log_text = f'[{dt.isoformat()}] {txt}'
-        self.text_browser.append(log_text)
 
 class MyMainWindow(QMainWindow):
     graphUpdated = pyqtSignal(str)
@@ -859,6 +741,124 @@ class MyMainWindow(QMainWindow):
         except Exception as e:
             print(f"Error in show_info: {str(e)}")
 
+class PortfolioOptimization:
+    def __init__(self, stock_list):
+        self.mk = Analyzer.MarketDB()
+        self.stocks = stock_list
+        self.df_port = pd.DataFrame()
+
+    def optimize_portfolio(self):
+        for s in self.stocks:
+            self.df_port[s] = self.mk.get_daily_price(s, '2022-01-01')['close']
+         
+        daily_ret = self.df_port.pct_change() 
+        annual_ret = daily_ret.mean() * 252
+        daily_cov = daily_ret.cov() 
+        annual_cov = daily_cov * 252
+
+        port_ret = [] 
+        port_risk = [] 
+        port_weights = []
+        sharpe_ratio = [] 
+
+        # 단일 종목인 경우 처리
+        if len(self.stocks) == 1:
+            # 단일 종목이므로, 모든 포트폴리오는 동일하게 처리됩니다.
+            port_ret = [annual_ret[0]]  # 단일 종목의 연간 수익
+            port_risk = [np.sqrt(annual_cov.iloc[0, 0])]  # 단일 종목의 리스크
+            port_weights = [[1]]  # 종목 비중은 100%
+            sharpe_ratio = [port_ret[0] / port_risk[0]]  # 샤프 비율
+        else:
+            # 여러 종목인 경우 처리
+            port_weights = np.random.random((20000, len(self.stocks)))
+            port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
+
+            port_ret = np.dot(port_weights, annual_ret)
+            port_risk = np.sqrt(np.einsum('ij,ji->i', port_weights @ annual_cov, port_weights.T))
+            sharpe_ratio = port_ret / port_risk
+
+        portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
+        for i, s in enumerate(self.stocks): 
+            portfolio[s] = [weight[i] for weight in port_weights]
+
+        self.df_port = pd.DataFrame(portfolio) 
+        self.df_port = self.df_port[['Returns', 'Risk', 'Sharpe'] + [s for s in self.stocks]]
+        self.max_sharpe = self.df_port.loc[self.df_port['Sharpe'] == self.df_port['Sharpe'].max()]
+        self.min_risk = self.df_port.loc[self.df_port['Risk'] == self.df_port['Risk'].min()]
+        
+        return self.df_port, self.max_sharpe, self.min_risk
+       
+
+class MyStrategy(bt.Strategy):
+    def __init__(self, text_browser, lineEditBuyCondition, lineEditSellCondition):
+        self.text_browser = text_browser
+        self.lineEditBuy = lineEditBuyCondition
+        self.lineEditSell = lineEditSellCondition  # QLineEdit 위젯 전달
+
+        self.dataclose = self.datas[0].close
+        self.dataopen = self.datas[0].open
+        self.order = None
+        self.buyprice = None
+        self.buycomm = None
+        self.initial_cash = self.broker.getvalue()
+        self.initial_price = self.dataclose[0]  # 최초 주가
+        self.set_indicators()
+
+    def set_indicators(self):
+        self.rsi = bt.indicators.RSI(self.data.close, period=14)
+        self.ema5 = bt.indicators.EMA(self.data.close, period=5)
+        self.ema10 = bt.indicators.EMA(self.data.close, period=10)
+        self.ema20 = bt.indicators.EMA(self.data.close, period=20)
+        self.ema60 = bt.indicators.EMA(self.data.close, period=60)
+        self.macdhist = bt.indicators.MACDHisto(self.data.close)
+
+    def notify_order(self, order):
+        if order.status in [order.Submitted, order.Accepted]:
+            return
+        if order.status in [order.Completed]:
+            if order.isbuy():
+                self.log(f'BUY  : 주가 {order.executed.price:,.0f}, '
+                         f'수량 {order.executed.size:,.0f}, '
+                         f'수수료 {order.executed.comm:,.0f}, '
+                         f'자산 {self.broker.getvalue():,.0f}')
+                self.buyprice = order.executed.price
+                self.buycomm = order.executed.comm
+            else:
+                # Sell 이벤트 발생 시, 구매 대비 수익률 계산
+                profit_ratio = ((order.executed.price - self.buyprice) / self.buyprice) * 100
+                self.log(f'SELL : 주가 {order.executed.price:,.0f}, '
+                         f'수량 {order.executed.size:,.0f}, '
+                         f'수수료 {order.executed.comm:,.0f}, '
+                         f'자산 {self.broker.getvalue():,.0f}, '
+                         f'수익률 {profit_ratio:.2f}%')  # 수익률 출력
+            self.bar_executed = len(self)
+        elif order.status in [order.Canceled, order.Margin, order.Rejected]:
+            self.log(f'ORDER {order.Status}: {order.info}')
+        self.order = None
+
+    def next(self):
+        if not self.position:
+            if self.buy_condition():
+                self.order = self.buy()
+        else:
+            if self.sell_condition():
+                self.order = self.sell()
+
+    def buy_condition(self):
+        condition_text = self.lineEditBuy.text()
+        return eval(condition_text)
+
+    def sell_condition(self):
+        condition_text = self.lineEditSell.text()
+        # 안전한 방법으로 문자열을 조건으로 변환 (여기서는 예시로 eval 사용)
+        return eval(condition_text)
+
+    def log(self, txt, dt=None):
+        dt = dt or self.datas[0].datetime.date(0)
+        log_text = f'[{dt.isoformat()}] {txt}'
+        self.text_browser.append(log_text)
+
+
 class StdoutRedirect(QObject):
     printOccur = pyqtSignal(str, str, name="print")
 
@@ -892,5 +892,6 @@ class StdoutRedirect(QObject):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     mainWindow = MyMainWindow()
-    mainWindow.show()
+    mainWindow.showMaximized()
+    # mainWindow.show()
     sys.exit(app.exec_())
