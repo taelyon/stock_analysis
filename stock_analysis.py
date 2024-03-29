@@ -88,7 +88,7 @@ class MyStrategy(bt.Strategy):
         self.set_indicators()
 
     def set_indicators(self):
-        self.rsi = bt.indicators.RSI_SMA(self.data.close, period=14)
+        self.rsi = bt.indicators.RSI(self.data.close, period=14)
         self.ema5 = bt.indicators.EMA(self.data.close, period=5)
         self.ema10 = bt.indicators.EMA(self.data.close, period=10)
         self.ema20 = bt.indicators.EMA(self.data.close, period=20)
@@ -691,8 +691,8 @@ class MyMainWindow(QMainWindow):
                 df['ENBOTTOM'] = df.MA20 - df.MA20 * 0.1
                 df.U = df.close.diff().clip(lower=0)
                 df.D = -df.close.diff().clip(upper=0)
-                df.RS = (df.U.rolling(window=14).mean() / df.D.rolling(window=14).mean())
-                df['RSI'] = 100 - 100 / (1 + df.RS)
+                df.RS = (df.U.ewm(span=14, adjust=False).mean() / df.D.ewm(span=14, adjust=False).mean())
+                df['RSI'] = 100 - (100 / (1 + df.RS))
                 df = df.dropna()
 
                 ema12 = df.close.ewm(span=12, adjust=False).mean()
@@ -799,10 +799,10 @@ class MyMainWindow(QMainWindow):
             self.df["RET5"] = ((self.df["close"].pct_change(5)) * 100).round(1)
             self.df["RET1"] = ((self.df["close"].pct_change(1)) * 100).round(1)
 
-            self.df["U"] = self.df["close"].diff().clip(lower=0)
-            self.df["D"] = -self.df["close"].diff().clip(upper=0)
-            self.df["RS"] = self.df.U.rolling(window=14).mean() / self.df.D.rolling(window=14).mean()
-            self.df["RSI"] = 100 - 100 / (1 + self.df["RS"])
+            self.df.U = self.df.close.diff().clip(lower=0)
+            self.df.D = -self.df.close.diff().clip(upper=0)
+            self.df.RS = (self.df.U.ewm(span=14, adjust=False).mean() / self.df.D.ewm(span=14, adjust=False).mean())
+            self.df['RSI'] = 100 - (100 / (1 + self.df.RS))
 
             ema_values = [5, 10, 20, 60, 130, 12, 26]
             for val in ema_values:
