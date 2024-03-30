@@ -223,7 +223,7 @@ class DBUpdater:
 
             # For period == 1, return the last 3 days of data
             if period == 1:
-                return stock_data.iloc[-3:]
+                return stock_data.iloc[-5:]
             
             # For period == 2, return all data since start_date
             return stock_data
