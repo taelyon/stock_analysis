@@ -431,6 +431,11 @@ class MyMainWindow(QMainWindow):
             )
         )
 
+         # 리스트 박스 아이템 클릭 시 이벤트 연결
+        self.lb_hold.itemClicked.connect(self.btncmd2)
+        self.lb_int.itemClicked.connect(self.btncmd3)
+        self.lb_search.itemClicked.connect(self.btncmd)
+
         # Backtesting 버튼 클릭 시그널에 메서드 연결
         self.BacktestingButton.clicked.connect(self.start_backtesting)
         self.lineEdit_stock.returnPressed.connect(self.start_backtesting)
