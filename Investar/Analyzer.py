@@ -1,20 +1,17 @@
+import sqlite3
 import pandas as pd
-import pymysql
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 import re
 from sqlalchemy import create_engine
 
 class MarketDB:
     def __init__(self):
-        self.engine = create_engine('mysql+pymysql://root:taelyon@localhost/investar', echo=False)
-
-        # self.conn = pymysql.connect(host='localhost', user='root', password='taelyon', db='investar', charset='utf8')
+        # SQLite3용 SQLAlchemy 엔진 생성
+        self.engine = create_engine('sqlite:///investar.db', echo=False)
         self.codes = {}
         self.get_comp_info()
 
     def __del__(self):
-        # self.conn.close()
         pass
 
     def get_comp_info(self):
@@ -25,14 +22,13 @@ class MarketDB:
         return stock_list
 
     def get_daily_price(self, code, start_date=None, end_date=None):
-
-        if (start_date is None):
+        if start_date is None:
             one_year_ago = datetime.today() - timedelta(days=365)
             start_date = one_year_ago.strftime('%Y-%m-%d')
-            print("start_date is initialized to '{}'".format(start_date))
+            print(f"start_date is initialized to '{start_date}'")
         else:
             start_lst = re.split(r'\D+', start_date)
-            if (start_lst[0] == ''):
+            if start_lst[0] == '':
                 start_lst = start_lst[1:]
             start_year = int(start_lst[0])
             start_month = int(start_lst[1])
@@ -48,9 +44,9 @@ class MarketDB:
                 return
             start_date = f"{start_year:04d}-{start_month:02d}-{start_day:02d}"
 
-        if (end_date is None):
+        if end_date is None:
             end_date = datetime.today().strftime('%Y-%m-%d')
-            print("end_date is initialized to '{}'".format(end_date))
+            print(f"end_date is initialized to '{end_date}'")
         else:
             end_lst = re.split(r'\D+', end_date)
             if end_lst[0] == '':
@@ -58,14 +54,14 @@ class MarketDB:
             end_year = int(end_lst[0])
             end_month = int(end_lst[1])
             end_day = int(end_lst[2])
-            if end_year < 1800 or end_year >2200:
-                print(f"ValueError: start_year({end_year:d}) is wrong.")
+            if end_year < 1800 or end_year > 2200:
+                print(f"ValueError: end_year({end_year:d}) is wrong.")
                 return
-            if end_month <1 or end_month > 12:
-                print(f"ValueError: start_month({end_month:d}) is wrong.")
+            if end_month < 1 or end_month > 12:
+                print(f"ValueError: end_month({end_month:d}) is wrong.")
                 return
-            if end_day < 1 or end_day >31:
-                print(f"ValueError: start_day({end_day:d}) is wrong.")
+            if end_day < 1 or end_day > 31:
+                print(f"ValueError: end_day({end_day:d}) is wrong.")
                 return
             end_date = f"{end_year:04d}-{end_month:02d}-{end_day:02d}"
 
@@ -77,9 +73,10 @@ class MarketDB:
             idx = codes_values.index(code)
             code = codes_keys[idx]
         else:
-            print("ValueError: Code({}) doesn't exist.".format(code))
+            print(f"ValueError: Code({code}) doesn't exist.")
+            return
 
-        sql = f"SELECT * FROM daily_price WHERE code = '{code}' and date >= '{start_date}' and date <= '{end_date}'"
+        sql = f"SELECT * FROM daily_price WHERE code = '{code}' AND date >= '{start_date}' AND date <= '{end_date}'"
         df = pd.read_sql(sql, self.engine)
         df.index = df['date']
         return df

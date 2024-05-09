@@ -502,6 +502,7 @@ class MyMainWindow(QMainWindow):
             print(f"Error occurred while updating stocks: {str(e)}")
 
     def update_stock_price(self, company, period):
+
         mk = Analyzer.MarketDB()
         stk = mk.get_comp_info()
         val = stk[(stk['company'] == company) | (stk['code'] == company)]
@@ -517,6 +518,8 @@ class MyMainWindow(QMainWindow):
         # df = df.dropna()
         if df is not None:
             db_updater.replace_into_db(df, 0, code, company)
+
+
 
     def update_specific_stock(self):
         try:
@@ -699,8 +702,8 @@ class MyMainWindow(QMainWindow):
             signal = macd.ewm(span=9, adjust=False).mean()
             macdhist = macd - signal
             self.df = self.df.assign(macd=macd, signal=signal, macdhist=macdhist)
-            self.df["number"] = self.df.index.map(mdates.date2num)
             self.df.index = pd.to_datetime(self.df.date)
+            self.df["number"] = self.df.index.map(mdates.date2num)
 
             ndays_high = self.df.high.rolling(window=14, min_periods=1).max()
             ndays_low = self.df.low.rolling(window=14, min_periods=1).min()
@@ -710,7 +713,6 @@ class MyMainWindow(QMainWindow):
             self.df = self.df[-80:]
             self.ohlc = self.df[["number", "open", "high", "low", "close"]]
             # self.df['len_code'] = self.df.code.str.len()          
-
             self.graphUpdated.emit("show_graph")
 
         except Exception as e:
@@ -895,6 +897,7 @@ class StdoutRedirect(QObject):
     
     
 if __name__ == "__main__":
+
     app = QApplication(sys.argv)
     mainWindow = MyMainWindow()
     mainWindow.showMaximized()
