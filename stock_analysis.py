@@ -1,5 +1,5 @@
 from threading import Thread
-from Investar import DBUpdater_new, Analyzer
+import DBUpdater_new
 import pandas as pd
 import numpy as np
 import matplotlib.dates as mdates
@@ -296,7 +296,7 @@ class MyMainWindow(QMainWindow):
                 self.lineEditBuyCondition,
                 self.lineEditSellCondition)
 
-            mk = Analyzer.MarketDB()
+            mk = DBUpdater_new.MarketDB()
             df = mk.get_daily_price(self.company, adjusted_start_date)  # Use adjusted start date
             df.date = pd.to_datetime(df.date)
 
@@ -503,7 +503,7 @@ class MyMainWindow(QMainWindow):
 
     def update_stock_price(self, company, period):
 
-        mk = Analyzer.MarketDB()
+        mk = DBUpdater_new.MarketDB()
         stk = mk.get_comp_info()
         val = stk[(stk['company'] == company) | (stk['code'] == company)]
         code = val.iloc[0]['code']
@@ -548,7 +548,7 @@ class MyMainWindow(QMainWindow):
         self.analyze_and_save_results(stock_list)
 
     def prepare_stock_data(self, nation):
-        mk = Analyzer.MarketDB()
+        mk = DBUpdater_new.MarketDB()
         stock_list = mk.get_comp_info()
         stock_list["len_code"] = stock_list.code.str.len()
 
@@ -573,7 +573,7 @@ class MyMainWindow(QMainWindow):
         for idx in range(len(stock_list)):
             if self.run:
                 company = stock_list["company"].values[idx]
-                mk = Analyzer.MarketDB()
+                mk = DBUpdater_new.MarketDB()
                 df = mk.get_daily_price(company, "2022-01-01")
 
                 df.MA20 = df.close.rolling(window=20).mean()
@@ -677,7 +677,7 @@ class MyMainWindow(QMainWindow):
 
     def show_graph(self, company):    
         try:
-            mk = Analyzer.MarketDB()
+            mk = DBUpdater_new.MarketDB()
             self.df = mk.get_daily_price(company, "2022-01-01")
             self.txt_company = company
 
@@ -721,7 +721,7 @@ class MyMainWindow(QMainWindow):
     # 주식 정보
     def show_info(self, company):
         try:
-            mk = Analyzer.MarketDB()
+            mk = DBUpdater_new.MarketDB()
             stock_list = mk.get_comp_info()
             val = stock_list[(stock_list["company"] == company) | (stock_list["code"] == company)]
 
@@ -750,7 +750,7 @@ class MyMainWindow(QMainWindow):
 
 class PortfolioOptimization:
     def __init__(self, stock_list):
-        self.mk = Analyzer.MarketDB()
+        self.mk = DBUpdater_new.MarketDB()
         self.stocks = stock_list
         self.df_port = pd.DataFrame()
 
