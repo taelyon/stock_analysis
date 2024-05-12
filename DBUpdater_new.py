@@ -42,7 +42,7 @@ class DBUpdater:
         self.codes = dict()
 
     def __del__(self):
-        self.conn.close()
+        pass
 
     def read_krx_code(self):
         result = []
