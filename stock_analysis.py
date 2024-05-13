@@ -133,13 +133,15 @@ class MyMainWindow(QMainWindow):
             p1 = plt.subplot2grid((9, 4), (0, 0), rowspan=4, colspan=4)
             p1.grid()
             day = str(self.df.date.values[-1])
-            title = (self.txt_company+" ("+day+ " : "+ str(self.df.close.values[-1])+ ")"+"\n"
-                + " 수익률: "+ "(20일 "+ str(self.df.RET20.values[-1])+ "%) "
-                + "(5일 "+ str(self.df.RET5.values[-1])+ "%) "
-                + "(1일 "+ str(self.df.RET1.values[-1])+ "%)"
-                + " / 이동평균: "+"(EMA5 " + str(round(self.df.ema5.values[-1],1))+") "
-                + "(EMA10 " + str(round(self.df.ema10.values[-1],1))+") "
-                + "(EMA20 " + str(round(self.df.ema20.values[-1],1))+") "
+            title = (
+                f"{self.txt_company} ({day}: {format(round(self.df.close.values[-1], 2), ',')} )\n"
+                + f" 수익률: (20일 {self.df.RET20.values[-1]}%) "
+                + f"(5일 {self.df.RET5.values[-1]}%) "
+                + f"(1일 {self.df.RET1.values[-1]}%)"
+                + " / 이동평균: "
+                + f"(EMA5 {format(round(self.df.ema5.values[-1], 1), ',')}) "
+                + f"(EMA10 {format(round(self.df.ema10.values[-1], 1), ',')}) "
+                + f"(EMA20 {format(round(self.df.ema20.values[-1], 1), ',')})"
             )
             p1.set_title(title)
             # p1.plot(self.df.index, self.df['upper'], 'r--')
