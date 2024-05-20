@@ -267,6 +267,21 @@ class MyMainWindow(QMainWindow):
             self.verticalLayout_7.addWidget(self.canvas_back)
             self.canvas_back.draw()
 
+    def save_search_condition(self):
+        search_condition = self.lineEditSearchCondition.text()
+        with open('files/search_condition.txt', 'w') as file:
+            file.write(search_condition)
+        print("Search condition saved.")
+
+    def save_search_default_condition(self):
+        search_condition = '(df.RSI.values[-1] < 30 and df.macdhist.values[-1] > df.macdhist.values[-2] and df.macd.values[-1] > df.macd.values[-2] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()) or (df.close.values[-1] < df.ENBOTTOM.values[-1] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any())'
+        with open('files/search_condition.txt', 'w') as file:
+            file.write(search_condition)
+        with open('files/search_condition.txt', 'r') as file:
+            search_condition_text = file.read().strip()
+            self.lineEditSearchCondition.setText(search_condition_text)
+        print("Search default condition saved.")
+
     def save_buy_condition(self):
         buy_condition = self.lineEditBuyCondition.text()
         with open('files/buy_condition.txt', 'w') as file:
@@ -361,6 +376,10 @@ class MyMainWindow(QMainWindow):
         self.btn_stop1.clicked.connect(lambda: self.update_stocks("stop"))
         self.btn_update4.clicked.connect(lambda: self.start_thread(self.update_specific_stock))
 
+        
+        self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
+        self.SearchdefaultConditionInputButton.clicked.connect(self.save_search_default_condition)
+        
 
         # 종목 탐색
 
@@ -476,6 +495,13 @@ class MyMainWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to load stock names: {e}")
 
+        try:
+            with open('files/search_condition.txt', 'r') as file:
+                search_condition_text = file.read().strip()
+                self.lineEditSearchCondition.setText(search_condition_text)
+        except Exception as e:
+            print(f"Error reading sell_condition.txt: {e}")
+
     def start_thread(self, func, *args):
         Thread(target=func, args=args, daemon=True).start()
 
@@ -520,8 +546,6 @@ class MyMainWindow(QMainWindow):
         # df = df.dropna()
         if df is not None:
             db_updater.replace_into_db(df, 0, code, company)
-
-
 
     def update_specific_stock(self):
         try:
@@ -609,11 +633,10 @@ class MyMainWindow(QMainWindow):
                 print(company)
 
                 try:
-                    if (
-                        df.RSI.values[-1] < 30
-                        and df.macdhist.values[-1] > df.macdhist.values[-2]
-                        and df.macd.values[-1] > df.macd.values[-2]
-                        and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()) or (df.close.values[-1] < df.ENBOTTOM.values[-1] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()):
+                    search_condition_text = self.lineEditSearchCondition.text()
+                    search_condition = eval(search_condition_text)
+
+                    if search_condition:
                         self.lb_search.addItem(company)
                         self.write_to_search_file(company)
                 except Exception as e:
@@ -895,8 +918,6 @@ class StdoutRedirect(QObject):
     def flush(self):
         # flush 메서드가 호출될 때 특별히 수행할 작업이 없는 경우, 이를 빈 메서드로 두어 호환성을 유지합니다.
         pass
-
-    
     
 if __name__ == "__main__":
 
