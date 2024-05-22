@@ -12,7 +12,8 @@ requests.packages.urllib3.disable_warnings()
 import warnings
 warnings.filterwarnings('ignore')
 import re
-from sqlalchemy import create_engine
+from pykrx import stock
+
 
 class DBUpdater:
     def __init__(self):
@@ -257,7 +258,7 @@ class DBUpdater:
         cursor.close()
         print('[{}] #{:04d} {} ({}) : {} rows > REPLACE INTO daily_price [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
 
-    def update_daily_price(self, nation):
+    def update_daily_price(self, nation, period=None):
         self.codes = dict()
 
         if nation in ['kr', 'us', 'all']:
@@ -274,14 +275,14 @@ class DBUpdater:
         for idx, code in enumerate(self.codes):
             if run:
                 if nation == 'kr' and len(code) >= 6:
-                    df = self.read_naver(code, 1)
+                    df = self.read_naver(code, period)
                 elif nation == 'us' and len(code) < 6:
-                    df = self.read_yfinance(code, 1)
+                    df = self.read_yfinance(code, period)
                 elif nation == 'all':
                     if len(code) >= 6:
-                        df = self.read_naver(code, 1)   # For initial run, change to 2 to update
+                        df = self.read_naver(code, period)   # For initial run, change to 2 to update
                     else:
-                        df = self.read_yfinance(code, 1) # For initial run, change to 2 to update
+                        df = self.read_yfinance(code, period) # For initial run, change to 2 to update
                 else:
                     continue
 
@@ -292,7 +293,7 @@ class DBUpdater:
 
     def execute_daily(self):
         self.update_comp_info('all')
-        self.update_daily_price('all')
+        self.update_daily_price('all', 1)
 
         tmnow = datetime.now()
         lastday = calendar.monthrange(tmnow.year, tmnow.month)[1]
@@ -312,18 +313,76 @@ class DBUpdater:
 class MarketDB:
     def __init__(self):
         # SQLite3용 SQLAlchemy 엔진 생성
-        self.engine = create_engine('sqlite:///investar.db', echo=False)
+        self.conn = sqlite3.connect('investar.db')
         self.codes = {}
-        self.get_comp_info()
 
     def __del__(self):
         pass
 
-    def get_comp_info(self):
+    def get_kr_stock_list(self):
+        today = datetime.today().strftime("%Y%m%d")
+        stocks = []
+
+        df = stock.get_market_ticker_list(market="ALL", date=today)
+        for ticker in df:
+            name = stock.get_market_ticker_name(ticker)
+            stocks.append((ticker, name))
+
+        df = stock.get_etf_ticker_list(date=today)
+        for ticker in df:
+            name = stock.get_etf_ticker_name(ticker)
+            stocks.append((ticker, name))
+
+        df_stocks = pd.DataFrame(stocks, columns=['Code', 'Name'])
+
+        return df_stocks
+        
+    def get_comp_info(self, company=None):
         sql = "SELECT * FROM company_info"
-        stock_list = pd.read_sql(sql, self.engine)
+        stock_list = pd.read_sql(sql, self.conn)
+
+        if company == 'all':
+            return stock_list
+        
+        # 입력된 종목코드나 종목명이 없는 경우, 최신 종목 리스트에서 추가
+        if company is not None:
+            if company not in stock_list['code'].values and company not in stock_list['company'].values:
+                print(f"{company}은(는) 새로운 종목입니다.")
+                kr_stock_list = self.get_kr_stock_list()
+
+                if company in kr_stock_list['Code'].values:
+                    new_stock = kr_stock_list[kr_stock_list['Code'] == company]
+                elif company in kr_stock_list['Name'].values:
+                    new_stock = kr_stock_list[kr_stock_list['Name'] == company]
+                else:
+                    print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
+                    return stock_list
+                
+                today = datetime.today().strftime('%Y-%m-%d')
+                new_stock['last_update'] = today
+                new_stock['country'] = 'kr'
+
+                # 새로운 종목을 stock_list에 추가
+                stock_list = pd.concat([stock_list, new_stock.rename(columns={'Name': 'company', 'Code': 'code'})], ignore_index=True)
+
+                # 데이터베이스에 업데이트
+                cursor = self.conn.cursor()
+                code = new_stock.Code.values[0]
+                company = new_stock.Name.values[0]
+                today = new_stock.last_update.values[0]
+                nation = new_stock.country.values[0]
+                cursor.execute(
+                    "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
+                    (code, company, today, nation)
+                )
+                self.codes[code] = company
+                self.conn.commit()
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] REPLACE INTO company_info VALUES ({today}, {nation})")
+
+        # self.codes 딕셔너리에 코드와 회사명 저장
         for idx in range(len(stock_list)):
             self.codes[stock_list['code'].values[idx]] = stock_list['company'].values[idx]
+
         return stock_list
 
     def get_daily_price(self, code, start_date=None, end_date=None):
@@ -382,7 +441,7 @@ class MarketDB:
             return
 
         sql = f"SELECT * FROM daily_price WHERE code = '{code}' AND date >= '{start_date}' AND date <= '{end_date}'"
-        df = pd.read_sql(sql, self.engine)
+        df = pd.read_sql(sql, self.conn)
         df.index = df['date']
         return df
     

@@ -2,16 +2,5 @@ build/
 dist/
 stock_analysis.spec
 *.pyc
-old/Backtrader_old.py
-old/DBUpdater_old.py
-old/stock_analysis_old.py
-files/stock_search.txt
-old/DBUpdater_new copy.py
-old/Analyzer copy.py
-Investar/DBUpdater_new copy.py
-Investar/DBUpdater_new.py
-Investar/investar.db
-Investar/DBUpdater_new.py
-Investar/DBUpdater_new.py
-Investar/DBUpdater_new.py
-Investar/DBUpdater_new.py
+old/
+files/

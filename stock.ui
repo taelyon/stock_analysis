@@ -123,38 +123,26 @@
        <property name="alignment">
         <set>Qt::AlignCenter</set>
        </property>
-       <widget class="QWidget" name="verticalLayoutWidget">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
-          <x>10</x>
-          <y>20</y>
-          <width>163</width>
-          <height>96</height>
+          <x>11</x>
+          <y>22</y>
+          <width>161</width>
+          <height>91</height>
          </rect>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout">
-         <property name="spacing">
-          <number>0</number>
-         </property>
-         <property name="sizeConstraint">
-          <enum>QLayout::SetDefaultConstraint</enum>
-         </property>
-         <property name="bottomMargin">
-          <number>0</number>
-         </property>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="150,150,150,150">
+          <layout class="QHBoxLayout" name="horizontalLayout_5">
            <property name="spacing">
-            <number>1</number>
-           </property>
-           <property name="sizeConstraint">
-            <enum>QLayout::SetDefaultConstraint</enum>
-           </property>
-           <property name="leftMargin">
             <number>0</number>
            </property>
            <item>
             <widget class="QPushButton" name="btn_update1">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
              <property name="maximumSize">
               <size>
                <width>39</width>
@@ -231,39 +219,6 @@
           </widget>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_2">
-           <property name="spacing">
-            <number>20</number>
-           </property>
-           <item>
-            <widget class="QRadioButton" name="btn_period1">
-             <property name="maximumSize">
-              <size>
-               <width>60</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="text">
-              <string>최근</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QRadioButton" name="btn_period2">
-             <property name="maximumSize">
-              <size>
-               <width>60</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="text">
-              <string>장기</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item>
           <widget class="QPushButton" name="btn_update4">
            <property name="enabled">
             <bool>true</bool>
@@ -315,7 +270,7 @@
        <property name="alignment">
         <set>Qt::AlignCenter</set>
        </property>
-       <widget class="QWidget" name="layoutWidget">
+       <widget class="QWidget" name="layoutWidget1">
         <property name="geometry">
          <rect>
           <x>11</x>
@@ -912,7 +867,7 @@
         <rect>
          <x>0</x>
          <y>10</y>
-         <width>1021</width>
+         <width>1011</width>
          <height>26</height>
         </rect>
        </property>
@@ -1118,6 +1073,13 @@
          </property>
         </widget>
        </item>
+       <item>
+        <widget class="QPushButton" name="buyConditionDefaultButton">
+         <property name="text">
+          <string>초기화</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
      <widget class="QWidget" name="layoutWidget4">
@@ -1152,6 +1114,13 @@
         <widget class="QPushButton" name="sellConditionInputButton">
          <property name="text">
           <string>입 력</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="sellConditionDefaultButton">
+         <property name="text">
+          <string>초기화</string>
          </property>
         </widget>
        </item>

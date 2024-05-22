@@ -9,7 +9,6 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import sys
 import os
 import time
-from datetime import datetime, timedelta
 from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
@@ -274,7 +273,8 @@ class MyMainWindow(QMainWindow):
         print("Search condition saved.")
 
     def save_search_default_condition(self):
-        search_condition = '(df.RSI.values[-1] < 30 and df.macdhist.values[-1] > df.macdhist.values[-2] and df.macd.values[-1] > df.macd.values[-2] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any()) or (df.close.values[-1] < df.ENBOTTOM.values[-1] and df.close.values[-1] > df.open.values[-1] and (df.volume.values[-2:] > 10000).any())'
+        search_condition = '(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])'
+
         with open('files/search_condition.txt', 'w') as file:
             file.write(search_condition)
         with open('files/search_condition.txt', 'r') as file:
@@ -288,11 +288,29 @@ class MyMainWindow(QMainWindow):
             file.write(buy_condition)
         print("Buy condition saved.")
 
+    def save_buy_default_condition(self):
+        buy_default_condition = '((self.rsi[-1] < 30 < self.rsi[0]) and (self.macdhist.macd[-1] < self.macdhist.macd[0])) or (self.macdhist.histo[-1] < 0 < self.macdhist.histo[0])'
+        with open('files/buy_condition.txt', 'w') as file:
+            file.write(buy_default_condition)
+        with open('files/buy_condition.txt', 'r') as file:
+            buy_condition_text = file.read().strip()
+            self.lineEditBuyCondition.setText(buy_condition_text)
+        print("Buy default condition saved.")
+
     def save_sell_condition(self):
         sell_condition = self.lineEditSellCondition.text()
         with open('files/sell_condition.txt', 'w') as file:
             file.write(sell_condition)
         print("Sell condition saved.")
+
+    def save_sell_default_condition(self):
+        sell_default_condition = '((self.ema5[-1] > self.ema20[-1]) and (self.ema5[0] < self.ema20[0]) and (self.macdhist.macd[-1] > self.macdhist.macd[0])) or (self.macdhist.histo[-1] > 0 > self.macdhist.histo[0])'
+        with open('files/sell_condition.txt', 'w') as file:
+            file.write(sell_default_condition)
+        with open('files/sell_condition.txt', 'r') as file:
+            sell_condition_text = file.read().strip()
+            self.lineEditSellCondition.setText(sell_condition_text)
+        print("Sell default condition saved.")
 
     def start_backtesting(self):
         try:
@@ -314,6 +332,7 @@ class MyMainWindow(QMainWindow):
                 self.lineEditSellCondition)
 
             mk = DBUpdater_new.MarketDB()
+            mk.get_comp_info()
             df = mk.get_daily_price(self.company, adjusted_start_date)  # Use adjusted start date
             df.date = pd.to_datetime(df.date)
 
@@ -375,12 +394,11 @@ class MyMainWindow(QMainWindow):
         self.btn_update3.clicked.connect(lambda: self.start_thread(self.update_stocks, "all"))
         self.btn_stop1.clicked.connect(lambda: self.update_stocks("stop"))
         self.btn_update4.clicked.connect(lambda: self.start_thread(self.update_specific_stock))
-
-        
+        self.ent_stock.returnPressed.connect(self.update_specific_stock)
+       
         self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
         self.SearchdefaultConditionInputButton.clicked.connect(self.save_search_default_condition)
         
-
         # 종목 탐색
 
         self.btn_search1.clicked.connect(lambda: self.start_thread(self.search_stock, "kr"))
@@ -464,7 +482,9 @@ class MyMainWindow(QMainWindow):
 
         # 버튼 클릭 시그널에 메서드 연결
         self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
+        self.buyConditionDefaultButton.clicked.connect(self.save_buy_default_condition)
         self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
+        self.sellConditionDefaultButton.clicked.connect(self.save_sell_default_condition)
         
         self.dateEdit_start.setDate(QtCore.QDate(2023, 1, 1))
         self.optimize_button.clicked.connect(self.run_portfolio_optimization)
@@ -521,7 +541,7 @@ class MyMainWindow(QMainWindow):
             db_updater = DBUpdater_new.DBUpdater()
             if nation in ["kr", "us", "all"]:
                 db_updater.update_comp_info(nation)
-                db_updater.update_daily_price(nation)
+                db_updater.update_daily_price(nation, 1)
             elif nation == "stop":
                 db_updater.update_daily_price("stop")
         except FileNotFoundError as e:
@@ -532,8 +552,9 @@ class MyMainWindow(QMainWindow):
     def update_stock_price(self, company, period):
 
         mk = DBUpdater_new.MarketDB()
-        stk = mk.get_comp_info()
-        val = stk[(stk['company'] == company) | (stk['code'] == company)]
+        stock_list = mk.get_comp_info(company)         
+
+        val = stock_list[(stock_list['company'] == company) | (stock_list['code'] == company)]
         code = val.iloc[0]['code']
         company = val.iloc[0]['company']
 
@@ -549,11 +570,11 @@ class MyMainWindow(QMainWindow):
 
     def update_specific_stock(self):
         try:
+            db_updater = DBUpdater_new.DBUpdater()
             company = self.ent_stock.text()
-            if self.btn_period1.isChecked():
-                self.update_stock_price(company, 1)
-            elif self.btn_period2.isChecked():
-                self.update_stock_price(company, 2)
+            if company == 'all':
+                db_updater.update_daily_price('all', 2)
+            self.update_stock_price(company, 2)
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
         except Exception as e:
@@ -600,6 +621,7 @@ class MyMainWindow(QMainWindow):
             if self.run:
                 company = stock_list["company"].values[idx]
                 mk = DBUpdater_new.MarketDB()
+                mk.get_comp_info()
                 df = mk.get_daily_price(company, "2022-01-01")
 
                 df.MA20 = df.close.rolling(window=20).mean()
@@ -692,7 +714,7 @@ class MyMainWindow(QMainWindow):
             db_updater = DBUpdater_new.DBUpdater()
             db_updater.update_daily_price("stop")
             time.sleep(0.2)
-            self.update_stock_price(company, 1)
+            self.update_stock_price(company, 2)
             Thread(target=self.show_graph, args=(company,), daemon=True).start()
             self.show_info(company)
         except Exception as e:
@@ -703,6 +725,7 @@ class MyMainWindow(QMainWindow):
     def show_graph(self, company):    
         try:
             mk = DBUpdater_new.MarketDB()
+            mk.get_comp_info(company)
             self.df = mk.get_daily_price(company, "2022-01-01")
             self.txt_company = company
 
@@ -776,6 +799,7 @@ class MyMainWindow(QMainWindow):
 class PortfolioOptimization:
     def __init__(self, stock_list):
         self.mk = DBUpdater_new.MarketDB()
+        self.mk.get_comp_info()
         self.stocks = stock_list
         self.df_port = pd.DataFrame()
 
