@@ -45,6 +45,19 @@ class DBUpdater:
     def __del__(self):
         pass
 
+    def init_db(self):
+        self.conn = sqlite3.connect('investar.db')
+        cursor = self.conn.cursor()
+
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+
+        for table in tables:
+            cursor.execute(f"DELETE FROM {table[0]};")
+            self.conn.commit()
+
+        self.conn.close()
+
     def read_krx_code(self):
         result = []
         for sosok in range(2):
@@ -323,12 +336,12 @@ class MarketDB:
         today = datetime.today().strftime("%Y%m%d")
         stocks = []
 
-        df = stock.get_market_ticker_list(market="ALL", date=today)
+        df = stock.get_market_ticker_list(market="ALL", date=today) # 상장법인
         for ticker in df:
             name = stock.get_market_ticker_name(ticker)
             stocks.append((ticker, name))
 
-        df = stock.get_etf_ticker_list(date=today)
+        df = stock.get_etf_ticker_list(date=today) # ETF
         for ticker in df:
             name = stock.get_etf_ticker_name(ticker)
             stocks.append((ticker, name))

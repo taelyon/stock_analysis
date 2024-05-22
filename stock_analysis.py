@@ -573,6 +573,7 @@ class MyMainWindow(QMainWindow):
             db_updater = DBUpdater_new.DBUpdater()
             company = self.ent_stock.text()
             if company == 'all':
+                db_updater.init_db()
                 db_updater.update_daily_price('all', 2)
             self.update_stock_price(company, 2)
         except FileNotFoundError as e:
