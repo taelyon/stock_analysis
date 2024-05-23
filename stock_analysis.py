@@ -169,15 +169,14 @@ class MyMainWindow(QMainWindow):
                         self.df.low.values[i] * 0.98,
                         "r^",
                         markersize=8,
-                        markeredgecolor="black", )
-                elif eval(re.sub('df', 'self.df', re.sub(r'\[-1\]', '[i]', re.sub(r'\[-2\]', '[i-1]', self.search_condition_text)))): #탐색조건식 반영
+                        markeredgecolor="black")
+                elif eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text))): # 탐색조건식 반영
                     p1.plot(
                         self.df.index.values[i],
                         self.df.low.values[i] * 0.98,
                         "y^",
                         markersize=8,
-                        markeredgecolor="black",
-                    )
+                        markeredgecolor="black")
                 elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
                         and self.df.ema5.values[i] < self.df.ema10.values[i]
                         and self.df.macd.values[i - 1] > self.df.macd.values[i])
@@ -187,8 +186,7 @@ class MyMainWindow(QMainWindow):
                         self.df.low.values[i] * 0.98,
                         "bv",
                         markersize=8,
-                        markeredgecolor="black",
-                    )
+                        markeredgecolor="black")
                 elif (
                     (self.df.RSI.values[i - 1] > 70 > self.df.RSI.values[i]
                         and self.df.macd.values[i - 1] > self.df.macd.values[i])
@@ -206,7 +204,7 @@ class MyMainWindow(QMainWindow):
                         self.df.low.values[i] * 0.98,
                         "gv",
                         markersize=8,
-                        markeredgecolor="black",)
+                        markeredgecolor="black")
 
             # plt2 = p1.twinx()
             # plt2.bar(self.df.index, self.df['volume'], color='deeppink', alpha=0.5, label='VOL')

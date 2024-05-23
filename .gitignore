@@ -4,3 +4,4 @@ stock_analysis.spec
 *.pyc
 old/
 files/
+investar.db
