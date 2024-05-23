@@ -56,7 +56,7 @@ class DBUpdater:
             cursor.execute(f"DELETE FROM {table[0]};")
             self.conn.commit()
 
-        self.conn.close()
+        cursor.close()
 
     def read_krx_code(self):
         result = []

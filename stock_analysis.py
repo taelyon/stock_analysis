@@ -9,6 +9,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import sys
 import os
 import time
+import re
 from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
@@ -162,18 +163,14 @@ class MyMainWindow(QMainWindow):
                         and self.df.RSI.values[i] < 30
                     )
                     and (self.df.macd.values[i - 1] < self.df.macd.values[i])
-                    and (self.df.close.values[i] > self.df.open.values[i])
-                ):
+                    and (self.df.close.values[i] > self.df.open.values[i])):
                     p1.plot(
                         self.df.index.values[i],
                         self.df.low.values[i] * 0.98,
                         "r^",
                         markersize=8,
-                        markeredgecolor="black",
-                    )
-                elif (self.df.RSI.values[i - 1] < 30 < self.df.RSI.values[i] and self.df.macd.values[i-1] < self.df.macd.values[i]) or (
-                        self.df.macdhist.values[i - 1] < 0 < self.df.macdhist.values[i]
-                ):
+                        markeredgecolor="black", )
+                elif eval(re.sub('df', 'self.df', re.sub(r'\[-1\]', '[i]', re.sub(r'\[-2\]', '[i-1]', self.search_condition_text)))): #탐색조건식 반영
                     p1.plot(
                         self.df.index.values[i],
                         self.df.low.values[i] * 0.98,
@@ -184,8 +181,7 @@ class MyMainWindow(QMainWindow):
                 elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
                         and self.df.ema5.values[i] < self.df.ema10.values[i]
                         and self.df.macd.values[i - 1] > self.df.macd.values[i])
-                    or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])
-                ):
+                    or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])):
                     p1.plot(
                         self.df.index.values[i],
                         self.df.low.values[i] * 0.98,
@@ -210,8 +206,7 @@ class MyMainWindow(QMainWindow):
                         self.df.low.values[i] * 0.98,
                         "gv",
                         markersize=8,
-                        markeredgecolor="black",
-                    )
+                        markeredgecolor="black",)
 
             # plt2 = p1.twinx()
             # plt2.bar(self.df.index, self.df['volume'], color='deeppink', alpha=0.5, label='VOL')
@@ -272,6 +267,9 @@ class MyMainWindow(QMainWindow):
             file.write(search_condition)
         print("Search condition saved.")
 
+        self.search_condition_text = search_condition
+        self.graphUpdated.emit("show_graph")
+        
     def save_search_default_condition(self):
         search_condition = '(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])'
 
@@ -281,6 +279,9 @@ class MyMainWindow(QMainWindow):
             search_condition_text = file.read().strip()
             self.lineEditSearchCondition.setText(search_condition_text)
         print("Search default condition saved.")
+
+        self.search_condition_text = search_condition
+        self.graphUpdated.emit("show_graph")
 
     def save_buy_condition(self):
         buy_condition = self.lineEditBuyCondition.text()
@@ -515,10 +516,11 @@ class MyMainWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to load stock names: {e}")
 
+        # 탐색 조건식
         try:
             with open('files/search_condition.txt', 'r') as file:
-                search_condition_text = file.read().strip()
-                self.lineEditSearchCondition.setText(search_condition_text)
+                self.search_condition_text = file.read().strip()
+                self.lineEditSearchCondition.setText(self.search_condition_text)
         except Exception as e:
             print(f"Error reading sell_condition.txt: {e}")
 
@@ -572,10 +574,12 @@ class MyMainWindow(QMainWindow):
         try:
             db_updater = DBUpdater_new.DBUpdater()
             company = self.ent_stock.text()
-            if company == 'all':
+            if company == 'default':
                 db_updater.init_db()
+                db_updater.update_comp_info('all')
                 db_updater.update_daily_price('all', 2)
-            self.update_stock_price(company, 2)
+            else:
+                self.update_stock_price(company, 2)
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
         except Exception as e:
@@ -671,8 +675,11 @@ class MyMainWindow(QMainWindow):
         self.show_info(company)
 
     def btncmd(self):
-        company = self.lb_search.currentItem().text()
-        self.update_and_show_stock(company)
+        try:
+            company = self.lb_search.currentItem().text()
+            self.update_and_show_stock(company)
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     def manage_stock_list(self, action, listbox=None, filename=None, company=None):
         if action == "add":
@@ -694,21 +701,33 @@ class MyMainWindow(QMainWindow):
                 f.write("%s\n" % company)
 
     def btncmd2(self):
-        company = self.manage_stock_list("get", self.lb_hold)
-        self.update_and_show_stock(company)
+        try:
+            company = self.manage_stock_list("get", self.lb_hold)
+            self.update_and_show_stock(company)
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     def btncmd_del1(self):
-        self.lb_hold.takeItem(self.lb_hold.currentRow())
-        self.manage_stock_list("update", self.lb_hold, "files/stock_hold.txt")
+        try:
+            self.lb_hold.takeItem(self.lb_hold.currentRow())
+            self.manage_stock_list("update", self.lb_hold, "files/stock_hold.txt")
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     def btncmd3(self):
-        company = self.manage_stock_list("get", self.lb_int)
-        self.update_and_show_stock(company)
-
+        try:
+            company = self.manage_stock_list("get", self.lb_int)
+            self.update_and_show_stock(company)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            
     def btncmd_del2(self):
-        self.lb_int.takeItem(self.lb_int.currentRow())
-        self.manage_stock_list("update", self.lb_int, "files/stock_interest.txt")
-
+        try:
+            self.lb_int.takeItem(self.lb_int.currentRow())
+            self.manage_stock_list("update", self.lb_int, "files/stock_interest.txt")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            
     def find_stock(self):
         try:
             company = self.le_ent.text()
