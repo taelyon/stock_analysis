@@ -179,7 +179,7 @@ class MyMainWindow(QMainWindow):
                         markeredgecolor="black")
                 elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
                         and self.df.ema5.values[i] < self.df.ema10.values[i]
-                        and self.df.macd.values[i - 1] > self.df.macd.values[i])
+                        and self.df.signal.values[i - 1] > self.df.signal.values[i])
                     or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])):
                     p1.plot(
                         self.df.index.values[i],
