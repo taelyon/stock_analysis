@@ -354,11 +354,11 @@ class MarketDB:
         sql = "SELECT * FROM company_info"
         stock_list = pd.read_sql(sql, self.conn)
 
-        if company == 'all':
+        if company == 'default':
             return stock_list
         
         # 입력된 종목코드나 종목명이 없는 경우, 최신 종목 리스트에서 추가
-        if company is not None:
+        if company:
             if company not in stock_list['code'].values and company not in stock_list['company'].values:
                 print(f"{company}은(는) 새로운 종목입니다.")
                 kr_stock_list = self.get_kr_stock_list()

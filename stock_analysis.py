@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 import matplotlib
 matplotlib.use('Agg')
 
+
 QtWidgets.QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
 
 pd.set_option("display.max_rows", None)
