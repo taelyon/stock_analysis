@@ -34,7 +34,6 @@ class MyMainWindow(QMainWindow):
         self.codes = {}
         self.run = True
 
-        # self.setupUi()
         self.connect_buttons()
 
         # 분석 화면
@@ -119,167 +118,186 @@ class MyMainWindow(QMainWindow):
             self.canvas_back.draw()
 
     def update_graph_ui(self, source):
+        try:
+            if source == "show_graph":
+                # self.verticalLayout_2.removeWidget(self.imagelabel_3)
+                self.imagelabel_3.hide()
+                self.verticalLayout_2.removeWidget(self.canvas)
+                self.fig = plt.figure()
+                self.canvas = FigureCanvas(self.fig)
 
-        if source == "show_graph":
-            # self.verticalLayout_2.removeWidget(self.imagelabel_3)
-            self.imagelabel_3.hide()
-            self.verticalLayout_2.removeWidget(self.canvas)
-            self.fig = plt.figure()
-            self.canvas = FigureCanvas(self.fig)
+                plt.rc("font", family="Malgun Gothic")
+                plt.rcParams["axes.unicode_minus"] = False
+                plt.clf()
 
-            plt.rc("font", family="Malgun Gothic")
-            plt.rcParams["axes.unicode_minus"] = False
-            plt.clf()
+                p1 = plt.subplot2grid((9, 4), (0, 0), rowspan=4, colspan=4)
+                p1.grid()
+                day = str(self.df.date.values[-1])
+                title = (
+                    f"{self.txt_company} ({day}: {format(round(self.df.close.values[-1], 2), ',')} )\n"
+                    + f" 수익률: (20일 {self.df.RET20.values[-1]}%) "
+                    + f"(5일 {self.df.RET5.values[-1]}%) "
+                    + f"(1일 {self.df.RET1.values[-1]}%)"
+                    + " / 이동평균: "
+                    + f"(EMA5 {format(round(self.df.ema5.values[-1], 1), ',')}) "
+                    + f"(EMA10 {format(round(self.df.ema10.values[-1], 1), ',')}) "
+                    + f"(EMA20 {format(round(self.df.ema20.values[-1], 1), ',')})"
+                )
+                p1.set_title(title)
+                # p1.plot(self.df.index, self.df['upper'], 'r--')
+                # p1.plot(self.df.index, self.df['lower'], 'c--')
+                # p1.plot(self.df.index, self.df['ENTOP'], 'r--')
+                p1.plot(self.df.index, self.df["ENBOTTOM"], "k--")
+                p1.fill_between(self.df.index, self.df["ENTOP"], self.df["ENBOTTOM"], color="0.93")
+                candlestick_ohlc(
+                    p1, self.ohlc.values, width=0.6, colorup="red", colordown="blue"
+                )
+                p1.plot(self.df.index, self.df["ema5"], "m", alpha=0.7, label="EMA5")
+                p1.plot(self.df.index, self.df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
+                p1.plot(self.df.index, self.df["ema20"], color="orange", alpha=0.7, label="EMA20")
+                # p1.plot(self.df.index, self.df['ema130'], color='black', alpha=0.7, label='EMA130')
+                for i in range(len(self.df.close)):            
+                    if eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_2))):
+                        p1.plot(
+                            self.df.index.values[i],
+                            self.df.low.values[i] * 0.98,
+                            "r^",
+                            markersize=8,
+                            markeredgecolor="black")
+                    elif eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_1))): # 탐색조건식 반영
+                        p1.plot(
+                            self.df.index.values[i],
+                            self.df.low.values[i] * 0.98,
+                            "y^",
+                            markersize=8,
+                            markeredgecolor="black")
+                    elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
+                            and self.df.ema5.values[i] < self.df.ema10.values[i]
+                            and self.df.signal.values[i - 1] > self.df.signal.values[i])
+                        or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])):
+                        p1.plot(
+                            self.df.index.values[i],
+                            self.df.low.values[i] * 0.98,
+                            "bv",
+                            markersize=8,
+                            markeredgecolor="black")
+                    elif (
+                        (self.df.RSI.values[i - 1] > 70 > self.df.RSI.values[i]
+                            and self.df.macd.values[i - 1] > self.df.macd.values[i])
+                        or (
+                            self.df.RSI.values[i] > 70
+                        and self.df.macd.values[i - 1] > self.df.macd.values[i]
+                        and (self.df.close.values[i] < self.df.open.values[i])
+                    ) or (
+                        (self.df.close.values[i - 1] > self.df.ENTOP.values[i - 1]
+                            and self.df.close.values[i] < self.df.ENTOP.values[i])
+                        and (self.df.macd.values[i - 1] > self.df.macd.values[i])
+                    )):
+                        p1.plot(
+                            self.df.index.values[i],
+                            self.df.low.values[i] * 0.98,
+                            "gv",
+                            markersize=8,
+                            markeredgecolor="black")
 
-            p1 = plt.subplot2grid((9, 4), (0, 0), rowspan=4, colspan=4)
-            p1.grid()
-            day = str(self.df.date.values[-1])
-            title = (
-                f"{self.txt_company} ({day}: {format(round(self.df.close.values[-1], 2), ',')} )\n"
-                + f" 수익률: (20일 {self.df.RET20.values[-1]}%) "
-                + f"(5일 {self.df.RET5.values[-1]}%) "
-                + f"(1일 {self.df.RET1.values[-1]}%)"
-                + " / 이동평균: "
-                + f"(EMA5 {format(round(self.df.ema5.values[-1], 1), ',')}) "
-                + f"(EMA10 {format(round(self.df.ema10.values[-1], 1), ',')}) "
-                + f"(EMA20 {format(round(self.df.ema20.values[-1], 1), ',')})"
-            )
-            p1.set_title(title)
-            # p1.plot(self.df.index, self.df['upper'], 'r--')
-            # p1.plot(self.df.index, self.df['lower'], 'c--')
-            # p1.plot(self.df.index, self.df['ENTOP'], 'r--')
-            p1.plot(self.df.index, self.df["ENBOTTOM"], "k--")
-            p1.fill_between(self.df.index, self.df["ENTOP"], self.df["ENBOTTOM"], color="0.93")
-            candlestick_ohlc(
-                p1, self.ohlc.values, width=0.6, colorup="red", colordown="blue"
-            )
-            p1.plot(self.df.index, self.df["ema5"], "m", alpha=0.7, label="EMA5")
-            p1.plot(self.df.index, self.df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
-            p1.plot(self.df.index, self.df["ema20"], color="orange", alpha=0.7, label="EMA20")
-            # p1.plot(self.df.index, self.df['ema130'], color='black', alpha=0.7, label='EMA130')
-            for i in range(len(self.df.close)):            
-                if (
-                    (
-                        self.df.close.values[i] < self.df.ENBOTTOM.values[i]
-                        and self.df.RSI.values[i] < 30
-                    )
-                    and (self.df.macd.values[i - 1] < self.df.macd.values[i])
-                    and (self.df.close.values[i] > self.df.open.values[i])):
-                    p1.plot(
-                        self.df.index.values[i],
-                        self.df.low.values[i] * 0.98,
-                        "r^",
-                        markersize=8,
-                        markeredgecolor="black")
-                elif eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text))): # 탐색조건식 반영
-                    p1.plot(
-                        self.df.index.values[i],
-                        self.df.low.values[i] * 0.98,
-                        "y^",
-                        markersize=8,
-                        markeredgecolor="black")
-                elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
-                        and self.df.ema5.values[i] < self.df.ema10.values[i]
-                        and self.df.signal.values[i - 1] > self.df.signal.values[i])
-                    or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])):
-                    p1.plot(
-                        self.df.index.values[i],
-                        self.df.low.values[i] * 0.98,
-                        "bv",
-                        markersize=8,
-                        markeredgecolor="black")
-                elif (
-                    (self.df.RSI.values[i - 1] > 70 > self.df.RSI.values[i]
-                        and self.df.macd.values[i - 1] > self.df.macd.values[i])
-                    or (
-                        self.df.RSI.values[i] > 70
-                    and self.df.macd.values[i - 1] > self.df.macd.values[i]
-                    and (self.df.close.values[i] < self.df.open.values[i])
-                ) or (
-                    (self.df.close.values[i - 1] > self.df.ENTOP.values[i - 1]
-                        and self.df.close.values[i] < self.df.ENTOP.values[i])
-                    and (self.df.macd.values[i - 1] > self.df.macd.values[i])
-                )):
-                    p1.plot(
-                        self.df.index.values[i],
-                        self.df.low.values[i] * 0.98,
-                        "gv",
-                        markersize=8,
-                        markeredgecolor="black")
+                # plt2 = p1.twinx()
+                # plt2.bar(self.df.index, self.df['volume'], color='deeppink', alpha=0.5, label='VOL')
+                # plt2.set_ylim(0, max(self.df.volume * 5))
+                p1.legend(loc="best")
+                plt.setp(p1.get_xticklabels(), visible=False)
 
-            # plt2 = p1.twinx()
-            # plt2.bar(self.df.index, self.df['volume'], color='deeppink', alpha=0.5, label='VOL')
-            # plt2.set_ylim(0, max(self.df.volume * 5))
-            p1.legend(loc="best")
-            plt.setp(p1.get_xticklabels(), visible=False)
+                p4 = plt.subplot2grid((9, 4), (4, 0), rowspan=1, colspan=4)
+                p4.grid(axis="x")
+                p4.bar(self.df.index, self.df["volume"], color="deeppink", alpha=0.5, label="VOL")
+                plt.setp(p4.get_xticklabels(), visible=False)
 
-            p4 = plt.subplot2grid((9, 4), (4, 0), rowspan=1, colspan=4)
-            p4.grid(axis="x")
-            p4.bar(self.df.index, self.df["volume"], color="deeppink", alpha=0.5, label="VOL")
-            plt.setp(p4.get_xticklabels(), visible=False)
+                p3 = plt.subplot2grid((9, 4), (5, 0), rowspan=2, colspan=4, sharex=p4)
+                p3.grid()
+                # p3.plot(self.df.index, self.df['fast_k'], color='c', label='%K')
+                p3.plot(self.df.index, self.df["slow_d"], "c--", label="%D")
+                p3.plot(self.df.index, self.df["RSI"], color="red", label="RSI")
+                p3.fill_between(
+                    self.df.index,
+                    self.df["RSI"],
+                    70,
+                    where=self.df["RSI"] >= 70,
+                    facecolor="red",
+                    alpha=0.3,
+                )
+                p3.fill_between(
+                    self.df.index,
+                    self.df["RSI"],
+                    30,
+                    where=self.df["RSI"] <= 30,
+                    facecolor="blue",
+                    alpha=0.3,
+                )
+                p3.set_yticks([0, 20, 30, 70, 80, 100])
+                p3.legend(loc="best")
+                plt.setp(p3.get_xticklabels(), visible=False)
 
-            p3 = plt.subplot2grid((9, 4), (5, 0), rowspan=2, colspan=4, sharex=p4)
-            p3.grid()
-            # p3.plot(self.df.index, self.df['fast_k'], color='c', label='%K')
-            p3.plot(self.df.index, self.df["slow_d"], "c--", label="%D")
-            p3.plot(self.df.index, self.df["RSI"], color="red", label="RSI")
-            p3.fill_between(
-                self.df.index,
-                self.df["RSI"],
-                70,
-                where=self.df["RSI"] >= 70,
-                facecolor="red",
-                alpha=0.3,
-            )
-            p3.fill_between(
-                self.df.index,
-                self.df["RSI"],
-                30,
-                where=self.df["RSI"] <= 30,
-                facecolor="blue",
-                alpha=0.3,
-            )
-            p3.set_yticks([0, 20, 30, 70, 80, 100])
-            p3.legend(loc="best")
-            plt.setp(p3.get_xticklabels(), visible=False)
+                p2 = plt.subplot2grid((9, 4), (7, 0), rowspan=2, colspan=4, sharex=p4)
+                p2.grid()
+                p2.bar(self.df.index, self.df["macdhist"], color="m", label="MACD-Hist")
+                p2.plot(self.df.index, self.df["macd"], color="c", label="MACD")
+                p2.plot(self.df.index, self.df["signal"], "g--")
+                p2.legend(loc="best")
 
-            p2 = plt.subplot2grid((9, 4), (7, 0), rowspan=2, colspan=4, sharex=p4)
-            p2.grid()
-            p2.bar(self.df.index, self.df["macdhist"], color="m", label="MACD-Hist")
-            p2.plot(self.df.index, self.df["macd"], color="c", label="MACD")
-            p2.plot(self.df.index, self.df["signal"], "g--")
-            p2.legend(loc="best")
+                plt.subplots_adjust(hspace=0.05)
+                
+                self.verticalLayout_2.addWidget(self.canvas)
+                self.canvas.draw()
 
-            plt.subplots_adjust(hspace=0.05)
-            
-            self.verticalLayout_2.addWidget(self.canvas)
-            self.canvas.draw()
+            elif source == "display_graph":
 
-        elif source == "display_graph":
-
-            self.verticalLayout_7.addWidget(self.canvas_back)
-            self.canvas_back.draw()
+                self.verticalLayout_7.addWidget(self.canvas_back)
+                self.canvas_back.draw()
+        except Exception as e:
+            print(str(e))
 
     def save_search_condition(self):
-        search_condition = self.lineEditSearchCondition.text()
-        with open('files/search_condition.txt', 'w') as file:
-            file.write(search_condition)
-        print("Search condition saved.")
-
-        self.search_condition_text = search_condition
+        # 라디오버튼의 선택 상태 확인
+        if self.radioButton.isChecked():
+            search_condition_1 = self.lineEditSearchCondition.text()
+            with open('files/search_condition_1.txt', 'w') as file:
+                file.write(search_condition_1)
+            print("Search condition saved.")
+            self.search_condition_text_1 = search_condition_1
+        elif self.radioButton_2.isChecked():
+            search_condition_2 = self.lineEditSearchCondition.text()
+            with open('files/search_condition_2.txt', 'w') as file:
+                file.write(search_condition_2)
+            print("Search condition saved.")
+            self.search_condition_text_2 = search_condition_2
+            
+        else:
+            search_condition = self.lineEditSearchCondition.text() + " - No Option Selected"
         self.graphUpdated.emit("show_graph")
-        
+
+    def save_search_condition_1(self):
+        with open('files/search_condition_1.txt', 'r') as file:
+            search_condition_1 = file.read().strip()
+            self.lineEditSearchCondition.setText(search_condition_1)
+        print("상승주 탐색조건 불러오기")
+
+    def save_search_condition_2(self):
+        with open('files/search_condition_2.txt', 'r') as file:
+            search_condition_2 = file.read().strip()
+            self.lineEditSearchCondition.setText(search_condition_2)
+        print("저가주 탐색조건 불러오기")
+
     def save_search_default_condition(self):
-        search_condition = '(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])'
+        search_condition_1 = '(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])'
+        search_condition_2 = '(df.close.values[-1] < df.ENBOTTOM.values[-1] and df.RSI.values[-1] < 30) and (df.macd.values[-2] < df.macd.values[-1]) and (df.close.values[-1] > df.open.values[-1])'
 
-        with open('files/search_condition.txt', 'w') as file:
-            file.write(search_condition)
-        with open('files/search_condition.txt', 'r') as file:
-            search_condition_text = file.read().strip()
-            self.lineEditSearchCondition.setText(search_condition_text)
-        print("Search default condition saved.")
-
-        self.search_condition_text = search_condition
+        with open('files/search_condition_1.txt', 'w') as file:
+            file.write(search_condition_1)
+            self.lineEditSearchCondition.setText(search_condition_1)
+        with open('files/search_condition_2.txt', 'w') as file:
+            file.write(search_condition_2)
+        print("탐색조건 초기화")
+        self.search_condition_text_1 = search_condition_1
+        self.search_condition_text_2 = search_condition_2
         self.graphUpdated.emit("show_graph")
 
     def save_buy_condition(self):
@@ -397,7 +415,10 @@ class MyMainWindow(QMainWindow):
         self.ent_stock.returnPressed.connect(self.update_specific_stock)
        
         self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
-        self.SearchdefaultConditionInputButton.clicked.connect(self.save_search_default_condition)
+        self.SearchConditionInputButton_2.clicked.connect(self.save_search_condition_1)
+        self.SearchConditionInputButton_3.clicked.connect(self.save_search_condition_2)
+        self.SearchConditionInputButton_4.clicked.connect(self.save_search_default_condition)
+        self.radioButton.setChecked(True)
         
         # 종목 탐색
 
@@ -517,9 +538,11 @@ class MyMainWindow(QMainWindow):
 
         # 탐색 조건식
         try:
-            with open('files/search_condition.txt', 'r') as file:
-                self.search_condition_text = file.read().strip()
-                self.lineEditSearchCondition.setText(self.search_condition_text)
+            with open('files/search_condition_1.txt', 'r') as file:
+                self.search_condition_text_1 = file.read().strip()
+                self.lineEditSearchCondition.setText(self.search_condition_text_1)
+            with open('files/search_condition_2.txt', 'r') as file:
+                self.search_condition_text_2 = file.read().strip()
         except Exception as e:
             print(f"Error reading sell_condition.txt: {e}")
 
