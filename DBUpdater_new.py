@@ -15,6 +15,7 @@ import re
 from pykrx import stock
 
 
+
 class DBUpdater:
     def __init__(self):
         # SQLite 데이터베이스 연결
@@ -349,6 +350,26 @@ class MarketDB:
         df_stocks = pd.DataFrame(stocks, columns=['Code', 'Name'])
 
         return df_stocks
+    
+    def get_us_stock_list(self):
+        # Fetch NASDAQ listed stocks
+        nasdaq_url = "ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt"
+        nasdaq_stocks = pd.read_csv(nasdaq_url, sep="|")
+
+        # Fetch NYSE listed stocks
+        nyse_url = "ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt"
+        nyse_stocks = pd.read_csv(nyse_url, sep="|")
+
+        # Concatenate both dataframes
+        all_stocks = pd.concat([nasdaq_stocks, nyse_stocks], ignore_index=True)
+
+        # Keep only the ticker symbol and security name columns
+        all_stocks = all_stocks[['Symbol', 'Security Name']]
+
+        # Rename columns to 'Code' and 'Name'
+        all_stocks.columns = ['Code', 'Name']
+
+        return all_stocks
         
     def get_comp_info(self, company=None):
         sql = "SELECT * FROM company_info"
@@ -362,18 +383,23 @@ class MarketDB:
             if company not in stock_list['code'].values and company not in stock_list['company'].values:
                 print(f"{company}은(는) 새로운 종목입니다.")
                 kr_stock_list = self.get_kr_stock_list()
+                us_stock_list = self.get_us_stock_list()
 
                 if company in kr_stock_list['Code'].values:
                     new_stock = kr_stock_list[kr_stock_list['Code'] == company]
                 elif company in kr_stock_list['Name'].values:
                     new_stock = kr_stock_list[kr_stock_list['Name'] == company]
+                elif company in us_stock_list['Code'].values:
+                    new_stock = us_stock_list[us_stock_list['Code'] == company]
+                elif company in us_stock_list['Name'].values:
+                    new_stock = us_stock_list[us_stock_list['Name'] == company]
                 else:
                     print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
                     return stock_list
                 
                 today = datetime.today().strftime('%Y-%m-%d')
                 new_stock['last_update'] = today
-                new_stock['country'] = 'kr'
+                new_stock['country'] = 'kr' if company in kr_stock_list.values else 'us'
 
                 # 새로운 종목을 stock_list에 추가
                 stock_list = pd.concat([stock_list, new_stock.rename(columns={'Name': 'company', 'Code': 'code'})], ignore_index=True)
