@@ -2,4 +2,4 @@
 Nvidia Corp
 Tesla Inc
 Nike Inc
-IONQ Inc
+IONQ

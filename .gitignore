@@ -4,3 +4,5 @@ stock_analysis.spec
 *.pyc
 old/
 investar.db
+stock_ui.py
+test.py

@@ -4,3 +4,4 @@ Apple Inc
 META
 GOOG
 신성델타테크
+

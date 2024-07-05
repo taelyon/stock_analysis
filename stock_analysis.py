@@ -214,7 +214,7 @@ class MyMainWindow(QMainWindow):
                 p3 = plt.subplot2grid((9, 4), (5, 0), rowspan=2, colspan=4, sharex=p4)
                 p3.grid()
                 # p3.plot(self.df.index, self.df['fast_k'], color='c', label='%K')
-                p3.plot(self.df.index, self.df["slow_d"], "c--", label="%D")
+                p3.plot(self.df.index, self.df["RSI_SIGNAL"], "blue", label="RSI_SIGNAL")
                 p3.plot(self.df.index, self.df["RSI"], color="red", label="RSI")
                 p3.fill_between(
                     self.df.index,
@@ -658,14 +658,16 @@ class MyMainWindow(QMainWindow):
                 df.D = -df.close.diff().clip(upper=0)
                 df.RS = (df.U.ewm(span=14, adjust=False).mean() / df.D.ewm(span=14, adjust=False).mean())
                 df['RSI'] = 100 - (100 / (1 + df.RS))
+                df["RSI_SIGNAL"] = df["RSI"].rolling(window=14).mean()
                 df = df.dropna()
-
+                ema5 = df.close.ewm(span=5, adjust=False).mean()
+                ema10 = df.close.ewm(span=10, adjust=False).mean()
                 ema12 = df.close.ewm(span=12, adjust=False).mean()
                 ema26 = df.close.ewm(span=26, adjust=False).mean()
                 macd = ema12 - ema26
                 signal = macd.ewm(span=9, adjust=False).mean()
                 macdhist = macd - signal
-                df = df.assign(ema12=ema12,
+                df = df.assign(ema12=ema12, ema5=ema5, ema10=ema10,
                     ema26=ema26,
                     macd=macd,
                     signal=signal,
@@ -783,6 +785,7 @@ class MyMainWindow(QMainWindow):
             self.df.D = -self.df.close.diff().clip(upper=0)
             self.df.RS = (self.df.U.ewm(span=14, adjust=False).mean() / self.df.D.ewm(span=14, adjust=False).mean())
             self.df['RSI'] = 100 - (100 / (1 + self.df.RS))
+            self.df["RSI_SIGNAL"] = self.df["RSI"].rolling(window=14).mean()
 
             ema_values = [5, 10, 20, 60, 130, 12, 26]
             for val in ema_values:

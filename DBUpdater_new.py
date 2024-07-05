@@ -15,7 +15,6 @@ import re
 from pykrx import stock
 
 
-
 class DBUpdater:
     def __init__(self):
         # SQLite 데이터베이스 연결
@@ -112,7 +111,7 @@ class DBUpdater:
 
         if nation == 'kr':
             if rs is None or rs[0] < today:
-                print('한국 주식 종목 업데이트')
+                print('한국 주식 종목 업데이트 시작')
                 krx = self.read_krx_code()
                 for idx in range(len(krx)):
                     code = krx.code.values[idx]
@@ -123,12 +122,12 @@ class DBUpdater:
                     )
                     self.codes[code] = company
                 self.conn.commit()
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] REPLACE INTO company_info VALUES ({today}, {nation})")
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 한국 주식 종목 업데이트 완료 ({today}, {nation})")
                 print('')
 
         elif nation == 'us':
             if rs is None or rs[0] < today:
-                print('미국 주식 종목 업데이트')
+                print('미국 주식 종목 업데이트 시작')
                 spx = self.read_spx_code()
                 for idx in range(len(spx)):
                     code = spx.code.values[idx]
@@ -139,12 +138,12 @@ class DBUpdater:
                     )
                     self.codes[code] = company
                 self.conn.commit()
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] REPLACE INTO company_info VALUES ({today}, {nation})")
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 미국 주식 종목 업데이트 완료 ({today}, {nation})")
                 print('')
 
         elif nation == 'all':
             if rs is None or rs[0] < today:
-                print('전체 주식 종목 업데이트')
+                print('전체 주식 종목 업데이트 시작')
                 krx = self.read_krx_code()
                 for idx in range(len(krx)):
                     code = krx.code.values[idx]
@@ -165,7 +164,7 @@ class DBUpdater:
                     )
                     self.codes[code] = company
                 self.conn.commit()
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] REPLACE INTO company_info VALUES ({today}, {nation})")
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 전체 주식 종목 업데이트 완료 ({today}, {nation})")
                 print('')
 
         cursor.close()
@@ -270,7 +269,7 @@ class DBUpdater:
             )
         self.conn.commit()
         cursor.close()
-        print('[{}] #{:04d} {} ({}) : {} rows > REPLACE INTO daily_price [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
+        print('[{}] #{:04d} {} ({}) : {}일 주가 업데이트 [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
 
     def update_daily_price(self, nation, period=None):
         self.codes = dict()
@@ -333,44 +332,21 @@ class MarketDB:
     def __del__(self):
         pass
 
-    def get_kr_stock_list(self):
-        today = datetime.today().strftime("%Y%m%d")
-        stocks = []
+    def get_krx_ticker_by_name(self, name):
+        tickers = stock.get_market_ticker_list(market="ALL")
+        for ticker in tickers:
+            if stock.get_market_ticker_name(ticker) == name:
+                return ticker
+        tickers = stock.get_etf_ticker_list()  # ETF
+        for ticker in tickers:
+            if stock.get_etf_ticker_name(ticker) == name:
+                return ticker
+        return None
 
-        df = stock.get_market_ticker_list(market="ALL", date=today) # 상장법인
-        for ticker in df:
-            name = stock.get_market_ticker_name(ticker)
-            stocks.append((ticker, name))
+    def is_hangul(self, text):
+        hangul_regex = re.compile('[\u3131-\u3163\uac00-\ud7a3]')
+        return bool(hangul_regex.search(text))
 
-        df = stock.get_etf_ticker_list(date=today) # ETF
-        for ticker in df:
-            name = stock.get_etf_ticker_name(ticker)
-            stocks.append((ticker, name))
-
-        df_stocks = pd.DataFrame(stocks, columns=['Code', 'Name'])
-
-        return df_stocks
-    
-    def get_us_stock_list(self):
-        # Fetch NASDAQ listed stocks
-        nasdaq_url = "ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt"
-        nasdaq_stocks = pd.read_csv(nasdaq_url, sep="|")
-
-        # Fetch NYSE listed stocks
-        nyse_url = "ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt"
-        nyse_stocks = pd.read_csv(nyse_url, sep="|")
-
-        # Concatenate both dataframes
-        all_stocks = pd.concat([nasdaq_stocks, nyse_stocks], ignore_index=True)
-
-        # Keep only the ticker symbol and security name columns
-        all_stocks = all_stocks[['Symbol', 'Security Name']]
-
-        # Rename columns to 'Code' and 'Name'
-        all_stocks.columns = ['Code', 'Name']
-
-        return all_stocks
-        
     def get_comp_info(self, company=None):
         sql = "SELECT * FROM company_info"
         stock_list = pd.read_sql(sql, self.conn)
@@ -378,36 +354,60 @@ class MarketDB:
         if company == 'default':
             return stock_list
         
+        stocks = []
+        
         # 입력된 종목코드나 종목명이 없는 경우, 최신 종목 리스트에서 추가
         if company:
             if company not in stock_list['code'].values and company not in stock_list['company'].values:
                 print(f"{company}은(는) 새로운 종목입니다.")
-                kr_stock_list = self.get_kr_stock_list()
-                us_stock_list = self.get_us_stock_list()
 
-                if company in kr_stock_list['Code'].values:
-                    new_stock = kr_stock_list[kr_stock_list['Code'] == company]
-                elif company in kr_stock_list['Name'].values:
-                    new_stock = kr_stock_list[kr_stock_list['Name'] == company]
-                elif company in us_stock_list['Code'].values:
-                    new_stock = us_stock_list[us_stock_list['Code'] == company]
-                elif company in us_stock_list['Name'].values:
-                    new_stock = us_stock_list[us_stock_list['Name'] == company]
+                if company.isdigit():  # 한국 증시 종목코드인 경우
+                    code = company
+                    company_name = stock.get_market_ticker_name(code)
+                    if isinstance(company_name, pd.DataFrame) and company_name.empty:
+                        company_name = stock.get_etf_ticker_name(code)
+                    stocks.append((code, company_name))
+
+                elif self.is_hangul(company):  # 한국 증시 종목명인 경우
+                    code = self.get_krx_ticker_by_name(company)
+                    company_name = company
+                    stocks.append((code, company_name))
+
+                elif company.isalpha():  # 미국 증시 종목코드인 경우
+                    code = company
+                    stock_info = yf.Ticker(code)
+                    company_info = stock_info.info
+                    company_name = company_info.get('longName', 'N/A')
+                    stocks.append((code, company_name))
                 else:
                     print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
                     return stock_list
-                
+
+                df_stocks = pd.DataFrame(stocks, columns=['code', 'company'])
+
+                new_stock = df_stocks[['code', 'company']].copy()
+                new_stock['company'] = new_stock['company'].str.replace("'", "")
+                new_stock['company'] = new_stock['company'].str.replace("Inc.", "Inc", regex=False)
+                new_stock['company'] = new_stock['company'].str.replace("Co.", "Co", regex=False)
+                new_stock['company'] = new_stock['company'].str.replace("Corp.", "Corp", regex=False)
+                new_stock['company'] = new_stock['company'].str.replace("Corporation", "Corp", regex=False)
+                new_stock['company'] = new_stock['company'].str.replace(",", "", regex=False)
+                new_stock['code'] = new_stock['code'].str.replace(".", "-", regex=False)
+              
                 today = datetime.today().strftime('%Y-%m-%d')
                 new_stock['last_update'] = today
-                new_stock['country'] = 'kr' if company in kr_stock_list.values else 'us'
+                if company.isdigit() or self.is_hangul(company):
+                    new_stock['country'] = 'kr'
+                else:
+                    new_stock['country'] = 'us'
 
                 # 새로운 종목을 stock_list에 추가
-                stock_list = pd.concat([stock_list, new_stock.rename(columns={'Name': 'company', 'Code': 'code'})], ignore_index=True)
+                stock_list = pd.concat([stock_list, new_stock], ignore_index=True)
 
                 # 데이터베이스에 업데이트
                 cursor = self.conn.cursor()
-                code = new_stock.Code.values[0]
-                company = new_stock.Name.values[0]
+                code = new_stock.code.values[0]
+                company = new_stock.company.values[0]
                 today = new_stock.last_update.values[0]
                 nation = new_stock.country.values[0]
                 cursor.execute(
@@ -416,12 +416,11 @@ class MarketDB:
                 )
                 self.codes[code] = company
                 self.conn.commit()
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] REPLACE INTO company_info VALUES ({today}, {nation})")
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 주식 종목 업데이트 ({today}, {nation})")
 
         # self.codes 딕셔너리에 코드와 회사명 저장
         for idx in range(len(stock_list)):
             self.codes[stock_list['code'].values[idx]] = stock_list['company'].values[idx]
-
         return stock_list
 
     def get_daily_price(self, code, start_date=None, end_date=None):
