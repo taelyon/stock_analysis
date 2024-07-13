@@ -1,12 +1,38 @@
-from bs4 import BeautifulSoup
-from io import StringIO
-import requests
 import pandas as pd
 from io import BytesIO
+from io import StringIO
 from datetime import datetime, timedelta
+import requests
+from bs4 import BeautifulSoup
+import plotly.express as px
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
-import plotly.express as px
+
+def industry_classification():
+    result = []
+    url = 'https://blog.naver.com/PostView.naver?blogId=taelyon&logNo=223507138478'
+    req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=True)
+    soup = BeautifulSoup(req.text, features="lxml")
+    box_type_l = soup.find("div", {"class": "se-table-container"})
+    type_2 = box_type_l.find("table", {"class": "se-table-content"})
+    tbody = type_2.find("tbody")
+    trs = tbody.findAll("tr")
+    stockInfos = []
+    for tr in trs:
+        try:
+            tds = tr.findAll("td")
+            industry = tds[0].text[1:-1]
+            class_id = tds[1].text[1:-1]
+            stockInfo = {"업종": industry, "분류": class_id}
+            stockInfos.append(stockInfo)
+        except Exception as e:
+            pass
+    list = stockInfos
+    result += list
+
+    df_industry = pd.DataFrame(result)
+    df_industry = df_industry.drop(df_industry.index[0])
+    return df_industry
 
 # 코스피 시세 정보 수집 함수
 def krx_sise_kospi(date_str):
@@ -77,10 +103,8 @@ while True:
     if df_sise_kospi['종가'].apply(pd.to_numeric, errors='coerce').notnull().all() and df_sise_kosdaq['종가'].apply(pd.to_numeric, errors='coerce').notnull().all():
         break       
     date -= timedelta(days=1)
-df_sise_kospi = df_sise_kospi[['종목코드', '종목명', '업종명', '등락률', '시가총액']]
-df_sise_kosdaq = df_sise_kosdaq[['종목코드', '종목명', '업종명', '등락률', '시가총액']]
-
-# 데이터프레임 병합
+df_sise_kospi = df_sise_kospi[['종목코드', '종목명', '등락률', '시가총액']]
+df_sise_kosdaq = df_sise_kosdaq[['종목코드', '종목명', '등락률', '시가총액']]
 df_combined = pd.concat([df_sise_kospi, df_sise_kosdaq])
 
 
@@ -93,20 +117,43 @@ table = soup.find('table')
 df_info = pd.read_html(StringIO(str(table)))[0]
 df_info = df_info[['종목코드', '업종']]
 df_info['종목코드'] = df_info['종목코드'].apply(lambda x: f'{x:06d}')
-# print(df_info)
 
 df_merged = pd.merge(df_combined, df_info, on='종목코드')
 
+df_industry = industry_classification()
+
+df_final = pd.merge(df_merged, df_industry, on='업종', how='left')
+
 # 시가총액이 가장 큰 상위 10개 종목 추출
-df_top500 = df_merged.sort_values(by='시가총액', ascending=False).head(500).reset_index(drop=True)
-# print(df_top500)
+df_top500 = df_final.sort_values(by='시가총액', ascending=False).head(500).reset_index(drop=True)
+
+# Define custom color scale
+color_scale = [
+    (0.0, "rgb(246,53,56)"),      
+    (0.16, "rgb(191,65,68)"),    
+    (0.33, "rgb(139,67,78)"),    
+    (0.5, "rgb(63,71,84)"),   
+    (0.66, "rgb(52,118,80)"),     
+    (0.83, "rgb(49,158,79)"),      
+    (1.0, "rgb(48,191,86)")  
+]
 
 fig = px.treemap(df_top500,
-                 path=['업종명', '업종', '종목명'],
+                 path=['분류', '종목명'],
                  values='시가총액',
                  color='등락률',
-                 color_continuous_scale='RdBu',
-                 title='한국 주식 500 맵')
-
+                 color_continuous_scale=color_scale,
+                 range_color=[-2.5, 2.5],
+                 custom_data=['등락률'],
+                 width=1450, height=690,
+                 )
+fig.update_traces(
+    texttemplate='<b>%{label}</b><br>%{customdata[0]:.2f}%',
+    textposition='middle center',
+    marker_line=dict(color='gray'),
+    textfont=dict(color='white'),
+    hovertemplate='<b>%{label}</b><br>시가총액: %{value}<br>등락률: %{customdata[0]:.2f}%<extra></extra>'
+)
+fig.update_layout(coloraxis_showscale=False)
 # 트리맵 보여주기
 fig.show()

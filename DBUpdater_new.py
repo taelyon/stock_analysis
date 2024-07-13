@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import requests
 import calendar
 from threading import Timer
-from pandas_datareader import data as pdr
+# from pandas_datareader import data as pdr
 import yfinance as yf
-yf.pdr_override()
+# yf.pdr_override()
 requests.packages.urllib3.disable_warnings()
 import warnings
 warnings.filterwarnings('ignore')
@@ -196,7 +196,7 @@ class DBUpdater:
     def ric_code(self):
         result = []
         url = 'https://blog.naver.com/PostView.naver?blogId=taelyon&logNo=222768959654'
-        req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
+        req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=True)
         soup = BeautifulSoup(req.text, features="lxml")
         box_type_l = soup.find("div", {"class": "se-table-container"})
         type_2 = box_type_l.find("table", {"class": "se-table-content"})
@@ -225,12 +225,12 @@ class DBUpdater:
             if period == 1:
                 start_date = datetime.today() - timedelta(days=10)
             elif period == 2:
-                start_date = datetime(2022, 1, 1)
+                start_date = datetime(2023, 1, 1)
             else:
                 print("Invalid period. Choose 1 for the last week or 2 for data since 2021.")
                 return None
 
-            stock_data = pdr.get_data_yahoo(code, start_date, datetime.today())
+            stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False)
             stock_data['date'] = stock_data.index.strftime('%Y-%m-%d')
             stock_data.reset_index(drop=True, inplace=True)
             stock_data['code'] = code

@@ -155,6 +155,7 @@ class MyMainWindow(QMainWindow):
                 p1.plot(self.df.index, self.df["ema5"], "m", alpha=0.7, label="EMA5")
                 p1.plot(self.df.index, self.df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
                 p1.plot(self.df.index, self.df["ema20"], color="orange", alpha=0.7, label="EMA20")
+                p1.plot(self.df.index, self.df["ema60"], color="cyan", alpha=0.7, label="EMA60")
                 # p1.plot(self.df.index, self.df['ema130'], color='black', alpha=0.7, label='EMA130')
                 for i in range(len(self.df.close)):            
                     if eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_2))):
@@ -662,12 +663,14 @@ class MyMainWindow(QMainWindow):
                 df = df.dropna()
                 ema5 = df.close.ewm(span=5, adjust=False).mean()
                 ema10 = df.close.ewm(span=10, adjust=False).mean()
+                ema20 = df.close.ewm(span=20, adjust=False).mean()
+                ema60 = df.close.ewm(span=60, adjust=False).mean()
                 ema12 = df.close.ewm(span=12, adjust=False).mean()
                 ema26 = df.close.ewm(span=26, adjust=False).mean()
                 macd = ema12 - ema26
                 signal = macd.ewm(span=9, adjust=False).mean()
                 macdhist = macd - signal
-                df = df.assign(ema12=ema12, ema5=ema5, ema10=ema10,
+                df = df.assign(ema12=ema12, ema5=ema5, ema10=ema10,ema20=ema20,ema60=ema60,
                     ema26=ema26,
                     macd=macd,
                     signal=signal,
