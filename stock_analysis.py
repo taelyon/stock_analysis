@@ -29,7 +29,7 @@ class MyMainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        uic.loadUi('stock.ui', self)
+        uic.loadUi('stock_analysis.ui', self)
 
         self.codes = {}
         self.run = True
