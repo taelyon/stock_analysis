@@ -41,6 +41,7 @@
        <property name="font">
         <font>
          <pointsize>9</pointsize>
+         <weight>50</weight>
          <bold>false</bold>
         </font>
        </property>
@@ -80,6 +81,7 @@
          <property name="font">
           <font>
            <pointsize>9</pointsize>
+           <weight>50</weight>
            <bold>false</bold>
            <kerning>false</kerning>
           </font>
@@ -206,6 +208,7 @@
              <property name="font">
               <font>
                <pointsize>9</pointsize>
+               <weight>50</weight>
                <bold>false</bold>
                <kerning>true</kerning>
               </font>
@@ -795,6 +798,7 @@
         <property name="font">
          <font>
           <pointsize>9</pointsize>
+          <weight>50</weight>
           <bold>false</bold>
          </font>
         </property>
@@ -978,7 +982,7 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
-        <widget class="QWebEngineView" name="webEngineView">
+        <widget class="QWebEngineView" name="webEngineView" native="true">
          <property name="geometry">
           <rect>
            <x>6</x>
@@ -987,7 +991,7 @@
            <height>821</height>
           </rect>
          </property>
-         <property name="url">
+         <property name="url" stdset="0">
           <url>
            <string>https://m.stock.naver.com/</string>
           </url>
@@ -1302,7 +1306,7 @@
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_8">
          <item>
-          <widget class="QWebEngineView" name="webEngineViewTreemap"/>
+          <widget class="QWebEngineView" name="webEngineViewTreemap" native="true"/>
          </item>
         </layout>
        </widget>
