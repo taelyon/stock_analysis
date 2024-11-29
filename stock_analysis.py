@@ -46,7 +46,8 @@ class MyMainWindow(QMainWindow):
         self._stdout.printOccur.connect(lambda x: self._append_text(x))
 
         # 시그널 슬롯 처리
-        self.graphUpdated.connect(self.update_graph_ui)              
+        self.graphUpdated.connect(self.update_graph_ui)
+        self.last_marker = None        
 
     def run_portfolio_optimization(self):
         stock_names = self.portfolio.text().split(',')  # QLineEdit에서 종목명을 가져옵니다.
@@ -146,8 +147,8 @@ class MyMainWindow(QMainWindow):
                 # p1.plot(self.df.index, self.df['upper'], 'r--')
                 # p1.plot(self.df.index, self.df['lower'], 'c--')
                 # p1.plot(self.df.index, self.df['ENTOP'], 'r--')
-                p1.plot(self.df.index, self.df["ENBOTTOM"], "k--")
-                p1.fill_between(self.df.index, self.df["ENTOP"], self.df["ENBOTTOM"], color="0.93")
+                # p1.plot(self.df.index, self.df["ENBOTTOM"], "k--")
+                p1.fill_between(self.df.index, self.df["ENTOP"], self.df["ENBOTTOM"], color="gray", alpha=0.15)
                 candlestick_ohlc(
                     p1, self.ohlc.values, width=0.6, colorup="red", colordown="blue"
                 )
@@ -156,43 +157,60 @@ class MyMainWindow(QMainWindow):
                 p1.plot(self.df.index, self.df["ema20"], color="orange", alpha=0.7, label="EMA20")
                 p1.plot(self.df.index, self.df["ema60"], color="cyan", alpha=0.7, label="EMA60")
                 # p1.plot(self.df.index, self.df['ema130'], color='black', alpha=0.7, label='EMA130')
+
+                p1.plot(self.df.index, self.df["Bollinger_Upper"], "b--")
+                p1.plot(self.df.index, self.df["Bollinger_Lower"], "b--")
+                # 두 밴드 사이를 채우기 (선택 사항)
+                # p1.fill_between(self.df.index, self.df["Bollinger_Upper"], self.df["Bollinger_Lower"], color='lightblue', alpha=0.15)
+
+                self.last_marker = None
                 for i in range(len(self.df.close)):            
                     if eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_2))):
-                        p1.plot(
-                            self.df.index.values[i],
-                            self.df.low.values[i] * 0.98,
-                            "r^",
-                            markersize=8,
-                            markeredgecolor="black")
-                    elif eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_1))): # 탐색조건식 반영
-                        p1.plot(
-                            self.df.index.values[i],
-                            self.df.low.values[i] * 0.98,
-                            "y^",
-                            markersize=8,
-                            markeredgecolor="black")
-                    elif ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
+                        p1.plot(self.df.index.values[i], self.df.low.values[i] * 0.97, "r^", markersize=8, markeredgecolor="black")
+
+                    if eval(re.sub('df', 'self.df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', self.search_condition_text_1))): # 탐색조건식 반영
+                        p1.plot(self.df.index.values[i], self.df.low.values[i] * 0.97, "y^", markersize=8, markeredgecolor="black")
+
+                    if ((self.df.ema5.values[i - 1] > self.df.ema10.values[i - 1]
                             and self.df.ema5.values[i] < self.df.ema10.values[i]
                             and self.df.signal.values[i - 1] > self.df.signal.values[i])
                         or (self.df.macdhist.values[i - 1] > 0 > self.df.macdhist.values[i])):
-                        p1.plot(
-                            self.df.index.values[i],
-                            self.df.low.values[i] * 0.98,
-                            "bv",
-                            markersize=8,
-                            markeredgecolor="black")
-                    elif (
+                        p1.plot(self.df.index.values[i], self.df.high.values[i] * 1.03, "bv", markersize=8, markeredgecolor="black")
+
+                    if (
                         (self.df.RSI.values[i - 1] > 70 > self.df.RSI.values[i] and self.df.macd.values[i - 1] > self.df.macd.values[i])
                         or
                         (self.df.RSI.values[i] > 70 and self.df.close.values[i] < self.df.open.values[i] and self.df.macd.values[i - 1] > self.df.macd.values[i])
                         or
                         (self.df.close.values[i - 1] > self.df.ENTOP.values[i - 1] and self.df.close.values[i] < self.df.ENTOP.values[i] and self.df.macd.values[i - 1] > self.df.macd.values[i])):
-                        p1.plot(
-                            self.df.index.values[i],
-                            self.df.low.values[i] * 0.98,
-                            "gv",
-                            markersize=8,
-                            markeredgecolor="black")
+                        p1.plot(self.df.index.values[i], self.df.high.values[i] * 1.03, "gv", markersize=8, markeredgecolor="black")
+
+                    if (
+                        # (self.df.MA12.values[i - 1] < self.df.MA12.values[i]
+                        # and self.df.close.values[i] > self.df.Bollinger_Upper.values[i]
+                        # and self.df.Bollinger_Upper.values[i - 1] < self.df.Bollinger_Upper.values[i]
+                        # and self.df.Bollinger_Lower.values[i - 1] > self.df.Bollinger_Lower.values[i])
+                        # or
+                        (self.df.MA12.values[i - 1] < self.df.MA12.values[i]
+                        and self.df.close.values[i] > self.df.MA12.values[i]
+                        and self.df.Bollinger_Upper.values[i - 1] < self.df.Bollinger_Upper.values[i]
+                        and self.df.Bollinger_Lower.values[i - 1] > self.df.Bollinger_Lower.values[i])):
+                        if self.last_marker != 'pink':
+                            p1.plot(self.df.index.values[i], self.df.low.values[i] * 0.97, "^", color="pink", markersize=8, markeredgecolor="black")
+                            self.last_marker = 'pink'
+
+                    if (
+                        (self.df.MA12.values[i - 1] < self.df.MA12.values[i]
+                        and self.df.Bollinger_Lower.values[i - 2] > self.df.Bollinger_Lower.values[i - 1] < self.df.Bollinger_Lower.values[i]
+                        and self.df.Bollinger_Upper.values[i - 1] < self.df.Bollinger_Upper.values[i])
+                        # # or
+                        # (self.df.MA12.values[i - 1] > self.df.MA12.values[i]
+                        # and self.df.Bollinger_Upper.values[i - 1] > self.df.Bollinger_Upper.values[i]
+                        # and self.df.Bollinger_Lower.values[i - 1] < self.df.Bollinger_Lower.values[i])
+                        ):
+                        if self.last_marker != 'skyblue':
+                            p1.plot(self.df.index.values[i], self.df.high.values[i] * 1.03, "v", color="skyblue", markersize=8, markeredgecolor="black")
+                            self.last_marker = 'skyblue'
 
                 # plt2 = p1.twinx()
                 # plt2.bar(self.df.index, self.df['volume'], color='deeppink', alpha=0.5, label='VOL')
@@ -768,6 +786,11 @@ class MyMainWindow(QMainWindow):
             mk.get_comp_info(company)
             self.df = mk.get_daily_price(company, "2022-01-01")
             self.txt_company = company
+
+            self.df["MA12"] = self.df["close"].rolling(window=12).mean()
+            self.df["STD12"] = self.df["close"].rolling(window=12).std()
+            self.df["Bollinger_Upper"] = self.df["MA12"] + (2 * self.df["STD12"])  # 상단 밴드
+            self.df["Bollinger_Lower"] = self.df["MA12"] - (2 * self.df["STD12"])  # 하단 밴드
 
             self.df["MA20"] = self.df["close"].rolling(window=20).mean()
             self.df["ENTOP"] = self.df["MA20"] + self.df["MA20"] * 0.1
