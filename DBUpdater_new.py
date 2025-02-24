@@ -5,15 +5,14 @@ from datetime import datetime, timedelta
 import requests
 import calendar
 from threading import Timer
-# from pandas_datareader import data as pdr
 import yfinance as yf
-# yf.pdr_override()
 requests.packages.urllib3.disable_warnings()
 import warnings
 warnings.filterwarnings('ignore')
 import re
 from pykrx import stock
-
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class DBUpdater:
     def __init__(self):
@@ -64,7 +63,7 @@ class DBUpdater:
             page_range = 8 if sosok == 0 else 4
             for page in range(1, page_range):
                 url = f"https://finance.naver.com/sise/sise_market_sum.nhn?sosok={sosok}&page={page}"
-                data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'})
+                data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
                 bsObj = BeautifulSoup(data.text, "html.parser")
                 type_2 = bsObj.find("table", {"class": "type_2"})
                 trs = type_2.find("tbody").findAll("tr")
@@ -196,7 +195,7 @@ class DBUpdater:
     def ric_code(self):
         result = []
         url = 'https://blog.naver.com/PostView.naver?blogId=taelyon&logNo=222768959654'
-        req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=True)
+        req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
         soup = BeautifulSoup(req.text, features="lxml")
         box_type_l = soup.find("div", {"class": "se-table-container"})
         type_2 = box_type_l.find("table", {"class": "se-table-content"})
@@ -225,20 +224,22 @@ class DBUpdater:
             if period == 1:
                 start_date = datetime.today() - timedelta(days=10)
             elif period == 2:
-                start_date = datetime(2023, 1, 1)
+                start_date = datetime(2024, 1, 1)
             else:
-                print("Invalid period. Choose 1 for the last week or 2 for data since 2021.")
+                print("Invalid period. Choose 1 for the last week or 2 for data since 2024.")
                 return None
 
             stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False)
+            stock_data.columns = stock_data.columns.get_level_values(0)
+            stock_data.columns.name = None
+
             stock_data['date'] = stock_data.index.strftime('%Y-%m-%d')
             stock_data.reset_index(drop=True, inplace=True)
-            stock_data['code'] = code
 
-            columns = ['code', 'date', 'Open', 'High', 'Low', 'Adj Close', 'Volume']
+            columns = ['date', 'Open', 'High', 'Low', 'Close', 'Volume']
             stock_data = stock_data[columns]
             stock_data.rename(columns={
-                'Open': 'open', 'High': 'high', 'Low': 'low', 'Adj Close': 'close', 'Volume': 'volume'
+                'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'
             }, inplace=True)
             stock_data = stock_data[['date', 'open', 'high', 'low', 'close', 'volume']].dropna()
 
@@ -261,6 +262,7 @@ class DBUpdater:
         
         # 날짜 열을 datetime 형식으로 변환
         df['date'] = pd.to_datetime(df['date'])
+        df = df.reset_index(drop=True)
 
         for r in df.itertuples():
             cursor.execute(
