@@ -855,7 +855,7 @@ class MyMainWindow(QMainWindow):
                 else:
                     raise ValueError(f"Unsupported country for company: {company}")
                 
-                self.webEngineView.load(QtCore.QUrl(stock_url))
+                self.webEngineView.setUrl(QtCore.QUrl(stock_url))
                 
         except Exception as e:
             print(f"Error in show_info: {str(e)}")

@@ -11,8 +11,6 @@ import warnings
 warnings.filterwarnings('ignore')
 import re
 from pykrx import stock
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
 
 class DBUpdater:
     def __init__(self):
@@ -229,7 +227,10 @@ class DBUpdater:
                 print("Invalid period. Choose 1 for the last week or 2 for data since 2024.")
                 return None
 
-            stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False)
+            session = requests.Session()
+            session.verify = False
+
+            stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False, session=session, auto_adjust=True)
             stock_data.columns = stock_data.columns.get_level_values(0)
             stock_data.columns.name = None
 
