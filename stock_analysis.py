@@ -10,7 +10,8 @@ import sys
 import os
 import time
 import re
-from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
+from PyQt5 import QtCore, QtGui, QtWidgets, uic
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
 import backtrader as bt
