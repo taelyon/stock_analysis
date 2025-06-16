@@ -3,5 +3,5 @@ Microsoft Corp
 Apple Inc
 META
 GOOG
-신성델타테크
-
+IONQ
+Palantir Technologies Inc Class A

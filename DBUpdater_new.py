@@ -2,11 +2,11 @@ import sqlite3
 import pandas as pd
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import requests
+from curl_cffi import requests
 import calendar
 from threading import Timer
 import yfinance as yf
-requests.packages.urllib3.disable_warnings()
+# requests.packages.urllib3.disable_warnings()
 import warnings
 warnings.filterwarnings('ignore')
 import re
@@ -227,7 +227,7 @@ class DBUpdater:
                 print("Invalid period. Choose 1 for the last week or 2 for data since 2024.")
                 return None
 
-            session = requests.Session()
+            session = requests.Session(impersonate="chrome")
             session.verify = False
 
             stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False, session=session, auto_adjust=True)

@@ -7,8 +7,8 @@ if %errorlevel%==0 (
     echo Internet connection is available.
     rem 다음에 실행할 명령을 여기에 넣으세요. 예: start firefox.exe
 
-    cd C:\myPackage\stock
-    C:\Users\BOK\AppData\Local\Programs\Python\Python312\python DBUpdater_new.py
+    cd C:\Users\taelyon\OneDrive\Document\stock_analysis
+    C:\Users\taelyon\AppData\Local\Programs\Python\Python312\python DBUpdater_new.py
     cmd.exe
 
 ) else (

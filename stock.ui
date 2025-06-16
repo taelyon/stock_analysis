@@ -47,7 +47,7 @@
      <enum>QTabWidget::TabShape::Rounded</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="tab">
      <property name="font">
@@ -1152,7 +1152,7 @@
        <rect>
         <x>101</x>
         <y>51</y>
-        <width>461</width>
+        <width>491</width>
         <height>26</height>
        </rect>
       </property>
@@ -1176,7 +1176,14 @@
         <widget class="QLineEdit" name="lineEdit_stock"/>
        </item>
        <item>
-        <widget class="QDateEdit" name="dateEdit_start"/>
+        <widget class="QDateEdit" name="dateEdit_start">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QPushButton" name="BacktestingButton">

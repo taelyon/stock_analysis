@@ -1,1 +1,1 @@
-(df.close.values[-1] < df.ENBOTTOM.values[-1] and df.RSI.values[-1] < 30) and (df.macd.values[-2] < df.macd.values[-1]) and (df.close.values[-1] > df.open.values[-1])
+(df.open.values[-1] < df.ENBOTTOM.values[-1] or df.RSI.values[-1] < 30) and (df.macdhist.values[-2] < df.macdhist.values[-1]) and (df.close.values[-1] > df.open.values[-1])

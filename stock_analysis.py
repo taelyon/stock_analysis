@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-from mplfinance.original_flavor import candlestick_ohlc
+import mplfinance as mpf
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import sys
 import os
@@ -149,8 +149,14 @@ class MyMainWindow(QMainWindow):
                 # p1.plot(self.df.index, self.df['ENTOP'], 'r--')
                 # p1.plot(self.df.index, self.df["ENBOTTOM"], "k--")
                 p1.fill_between(self.df.index, self.df["ENTOP"], self.df["ENBOTTOM"], color="gray", alpha=0.15)
-                candlestick_ohlc(
-                    p1, self.ohlc.values, width=0.6, colorup="red", colordown="blue"
+                korean_colors = mpf.make_marketcolors(up='red', down='blue', edge='inherit', wick='black', volume='gray')
+                korean_style = mpf.make_mpf_style(base_mpf_style='charles', marketcolors=korean_colors, gridcolor='gray', gridstyle='--', facecolor='white', edgecolor='black')
+                mpf.plot(
+                    self.df,
+                    type='candle',
+                    ax=p1,
+                    style=korean_style,
+                    show_nontrading=True
                 )
                 p1.plot(self.df.index, self.df["ema5"], "m", alpha=0.7, label="EMA5")
                 p1.plot(self.df.index, self.df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
