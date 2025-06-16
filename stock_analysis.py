@@ -878,8 +878,6 @@ class MyMainWindow(QMainWindow):
 
             if not self.url_attempts:
                 raise ValueError(f"Unsupported country for company: {company}")
-
-            print(f"Trying URL: {self.url_attempts[0]}")
             self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[0]))
 
         except Exception as e:
@@ -896,13 +894,7 @@ class MyMainWindow(QMainWindow):
                 self.current_attempt += 1
                 self.error_detected = False
                 self.error_message = ""
-                print(f"Trying next URL: {self.url_attempts[self.current_attempt]}")
                 self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
-            else:
-                print(f"Error: No valid page for {self.current_company}. Last error: {self.error_message}")
-        else:
-            print(f"Success: {self.url_attempts[self.current_attempt]}")
-
    
 class PortfolioOptimization:
     def __init__(self, stock_list):
