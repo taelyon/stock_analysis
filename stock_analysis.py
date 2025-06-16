@@ -10,7 +10,8 @@ import sys
 import os
 import time
 import re
-from PyQt5 import QtCore, QtGui, QtWidgets, QtWebEngineWidgets, uic
+from PyQt5 import QtCore, QtGui, QtWidgets, uic
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.QtCore import *
 import backtrader as bt
@@ -47,7 +48,19 @@ class MyMainWindow(QMainWindow):
 
         # 시그널 슬롯 처리
         self.graphUpdated.connect(self.update_graph_ui)
-        self.last_marker = None        
+        # 웹 페이지 로드와 오류 처리 초기화
+        self.error_detected = False
+        self.error_message = ""
+        self.current_company = None
+        self.url_attempts = []
+        self.current_attempt = 0
+
+        self.page = QWebEnginePage()
+        self.webEngineView.setPage(self.page)
+        self.page.javaScriptConsoleMessage = self.javaScriptConsoleMessage
+        self.webEngineView.loadFinished.connect(self.handle_load_finished)
+
+        self.last_marker = None
 
     def run_portfolio_optimization(self):
         stock_names = self.portfolio.text().split(',')  # QLineEdit에서 종목명을 가져옵니다.
@@ -839,32 +852,56 @@ class MyMainWindow(QMainWindow):
     # 주식 정보
     def show_info(self, company):
         try:
+            self.current_company = company
+            self.current_attempt = 0
+            self.error_detected = False
+            self.error_message = ""
+
             mk = DBUpdater_new.MarketDB()
             stock_list = mk.get_comp_info()
             val = stock_list[(stock_list["company"] == company) | (stock_list["code"] == company)]
 
-            if not val.empty:
-                country = val.iloc[0]["country"]
-                code = val.iloc[0]["code"]
+            if val.empty:
+                raise ValueError(f"No data found for company: {company}")
 
-                if country == "kr":
-                    stock_url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
-                elif country == "us":
-                    db_updater = DBUpdater_new.DBUpdater()
-                    ric_code = db_updater.ric_code()
-                    ric = ric_code[ric_code["code"] == code]
-                    if not ric.empty:
-                        ric_val = ric.iloc[0]["ric"]
-                        stock_url = f"https://m.stock.naver.com/worldstock/stock/{ric_val}/total"
-                    else:
-                        raise ValueError(f"No RIC code found for US company: {company}")
-                else:
-                    raise ValueError(f"Unsupported country for company: {company}")
-                
-                self.webEngineView.setUrl(QtCore.QUrl(stock_url))
-                
+            country = val.iloc[0]["country"]
+            code = val.iloc[0]["code"]
+            self.url_attempts = (
+                [f"https://m.stock.naver.com/domestic/stock/{code}/total"] if country == "kr" else
+                [
+                    f"https://m.stock.naver.com/worldstock/stock/{code}/total",
+                    f"https://m.stock.naver.com/worldstock/stock/{code}.O/total",
+                    f"https://m.stock.naver.com/worldstock/stock/{code}.K/total",
+                ] if country == "us" else
+                []
+            )
+
+            if not self.url_attempts:
+                raise ValueError(f"Unsupported country for company: {company}")
+
+            print(f"Trying URL: {self.url_attempts[0]}")
+            self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[0]))
+
         except Exception as e:
             print(f"Error in show_info: {str(e)}")
+
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
+        if "[WARN] 409 [object Object]" in message or "AxiosError: Request failed with status code 409" in message:
+            self.error_detected = True
+            self.error_message = message
+
+    def handle_load_finished(self, ok):
+        if not ok or self.error_detected:
+            if self.current_attempt < len(self.url_attempts) - 1:
+                self.current_attempt += 1
+                self.error_detected = False
+                self.error_message = ""
+                print(f"Trying next URL: {self.url_attempts[self.current_attempt]}")
+                self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
+            else:
+                print(f"Error: No valid page for {self.current_company}. Last error: {self.error_message}")
+        else:
+            print(f"Success: {self.url_attempts[self.current_attempt]}")
 
    
 class PortfolioOptimization:
