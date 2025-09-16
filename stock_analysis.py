@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Lock
 import DBUpdater_new
 import pandas as pd
 import numpy as np
@@ -34,6 +34,10 @@ class MyMainWindow(QMainWindow):
 
         self.codes = {}
         self.run = True
+
+        # 스레드 동기화를 위한 Lock 객체 생성
+        self.db_lock = Lock()
+        self.file_lock = Lock()
 
         self.connect_buttons()
 
@@ -291,14 +295,16 @@ class MyMainWindow(QMainWindow):
         # 라디오버튼의 선택 상태 확인
         if self.radioButton.isChecked():
             search_condition_1 = self.lineEditSearchCondition.text()
-            with open('files/search_condition_1.txt', 'w') as file:
-                file.write(search_condition_1)
+            with self.file_lock:
+                with open('files/search_condition_1.txt', 'w') as file:
+                    file.write(search_condition_1)
             print("Search condition saved.")
             self.search_condition_text_1 = search_condition_1
         elif self.radioButton_2.isChecked():
             search_condition_2 = self.lineEditSearchCondition.text()
-            with open('files/search_condition_2.txt', 'w') as file:
-                file.write(search_condition_2)
+            with self.file_lock:
+                with open('files/search_condition_2.txt', 'w') as file:
+                    file.write(search_condition_2)
             print("Search condition saved.")
             self.search_condition_text_2 = search_condition_2
             
@@ -307,26 +313,29 @@ class MyMainWindow(QMainWindow):
         self.graphUpdated.emit("show_graph")
 
     def save_search_condition_1(self):
-        with open('files/search_condition_1.txt', 'r') as file:
-            search_condition_1 = file.read().strip()
-            self.lineEditSearchCondition.setText(search_condition_1)
+        with self.file_lock:
+            with open('files/search_condition_1.txt', 'r') as file:
+                search_condition_1 = file.read().strip()
+                self.lineEditSearchCondition.setText(search_condition_1)
         print("상승주 탐색조건 불러오기")
 
     def save_search_condition_2(self):
-        with open('files/search_condition_2.txt', 'r') as file:
-            search_condition_2 = file.read().strip()
-            self.lineEditSearchCondition.setText(search_condition_2)
+        with self.file_lock:
+            with open('files/search_condition_2.txt', 'r') as file:
+                search_condition_2 = file.read().strip()
+                self.lineEditSearchCondition.setText(search_condition_2)
         print("저가주 탐색조건 불러오기")
 
     def save_search_default_condition(self):
         search_condition_1 = '(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])'
         search_condition_2 = '(df.open.values[-1] < df.ENBOTTOM.values[-1] or df.RSI.values[-1] < 30) and (df.macdhist.values[-2] < df.macdhist.values[-1]) and (df.close.values[-1] > df.open.values[-1])'
 
-        with open('files/search_condition_1.txt', 'w') as file:
-            file.write(search_condition_1)
-            self.lineEditSearchCondition.setText(search_condition_1)
-        with open('files/search_condition_2.txt', 'w') as file:
-            file.write(search_condition_2)
+        with self.file_lock:
+            with open('files/search_condition_1.txt', 'w') as file:
+                file.write(search_condition_1)
+                self.lineEditSearchCondition.setText(search_condition_1)
+            with open('files/search_condition_2.txt', 'w') as file:
+                file.write(search_condition_2)
         print("탐색조건 초기화")
         self.search_condition_text_1 = search_condition_1
         self.search_condition_text_2 = search_condition_2
@@ -334,32 +343,36 @@ class MyMainWindow(QMainWindow):
 
     def save_buy_condition(self):
         buy_condition = self.lineEditBuyCondition.text()
-        with open('files/buy_condition.txt', 'w') as file:
-            file.write(buy_condition)
+        with self.file_lock:
+            with open('files/buy_condition.txt', 'w') as file:
+                file.write(buy_condition)
         print("Buy condition saved.")
 
     def save_buy_default_condition(self):
         buy_default_condition = '((self.rsi[-1] < 30 < self.rsi[0]) and (self.macdhist.macd[-1] < self.macdhist.macd[0])) or (self.macdhist.histo[-1] < 0 < self.macdhist.histo[0])'
-        with open('files/buy_condition.txt', 'w') as file:
-            file.write(buy_default_condition)
-        with open('files/buy_condition.txt', 'r') as file:
-            buy_condition_text = file.read().strip()
-            self.lineEditBuyCondition.setText(buy_condition_text)
+        with self.file_lock:
+            with open('files/buy_condition.txt', 'w') as file:
+                file.write(buy_default_condition)
+            with open('files/buy_condition.txt', 'r') as file:
+                buy_condition_text = file.read().strip()
+                self.lineEditBuyCondition.setText(buy_condition_text)
         print("Buy default condition saved.")
 
     def save_sell_condition(self):
         sell_condition = self.lineEditSellCondition.text()
-        with open('files/sell_condition.txt', 'w') as file:
-            file.write(sell_condition)
+        with self.file_lock:
+            with open('files/sell_condition.txt', 'w') as file:
+                file.write(sell_condition)
         print("Sell condition saved.")
 
     def save_sell_default_condition(self):
         sell_default_condition = '((self.ema5[-1] > self.ema20[-1]) and (self.ema5[0] < self.ema20[0]) and (self.macdhist.macd[-1] > self.macdhist.macd[0])) or (self.macdhist.histo[-1] > 0 > self.macdhist.histo[0])'
-        with open('files/sell_condition.txt', 'w') as file:
-            file.write(sell_default_condition)
-        with open('files/sell_condition.txt', 'r') as file:
-            sell_condition_text = file.read().strip()
-            self.lineEditSellCondition.setText(sell_condition_text)
+        with self.file_lock:
+            with open('files/sell_condition.txt', 'w') as file:
+                file.write(sell_default_condition)
+            with open('files/sell_condition.txt', 'r') as file:
+                sell_condition_text = file.read().strip()
+                self.lineEditSellCondition.setText(sell_condition_text)
         print("Sell default condition saved.")
 
     def start_backtesting(self):
@@ -380,10 +393,12 @@ class MyMainWindow(QMainWindow):
                 self.textBrowser,
                 self.lineEditBuyCondition,
                 self.lineEditSellCondition)
-
-            mk = DBUpdater_new.MarketDB()
-            mk.get_comp_info()
-            df = mk.get_daily_price(self.company, adjusted_start_date)  # Use adjusted start date
+            
+            with self.db_lock:
+                mk = DBUpdater_new.MarketDB()
+                mk.get_comp_info()
+                df = mk.get_daily_price(self.company, adjusted_start_date)  # Use adjusted start date
+            
             df.date = pd.to_datetime(df.date)
 
             data = bt.feeds.PandasData(dataname=df, datetime='date')
@@ -432,9 +447,9 @@ class MyMainWindow(QMainWindow):
         self.graphUpdated.emit("display_graph")
 
     def _append_text(self, msg):
+        # QApplication.processEvents()를 호출하지 않고 UI 업데이트
         self.log_widget.moveCursor(QtGui.QTextCursor.End)
         self.log_widget.insertPlainText(msg)
-        QApplication.processEvents(QEventLoop.ExcludeUserInputEvents)
 
     def connect_buttons(self):
         # 종목 업데이트
@@ -544,37 +559,41 @@ class MyMainWindow(QMainWindow):
 
         # buy_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
         try:
-            with open('files/buy_condition.txt', 'r') as file:
-                buy_condition_text = file.read().strip()
-                self.lineEditBuyCondition.setText(buy_condition_text)
+            with self.file_lock:
+                with open('files/buy_condition.txt', 'r') as file:
+                    buy_condition_text = file.read().strip()
+                    self.lineEditBuyCondition.setText(buy_condition_text)
         except Exception as e:
             print(f"Error reading buy_condition.txt: {e}")
 
         # sell_condition.txt 파일에서 조건을 로드하여 QLineEdit에 설정
         try:
-            with open('files/sell_condition.txt', 'r') as file:
-                sell_condition_text = file.read().strip()
-                self.lineEditSellCondition.setText(sell_condition_text)
+            with self.file_lock:
+                with open('files/sell_condition.txt', 'r') as file:
+                    sell_condition_text = file.read().strip()
+                    self.lineEditSellCondition.setText(sell_condition_text)
         except Exception as e:
             print(f"Error reading sell_condition.txt: {e}")
 
         try:
-            with open('files/stock_hold.txt', 'r', encoding='utf-8') as file:
-                stock_names = [line.strip() for line in file if line.strip()]
-                # 주식명을 쉼표로 연결합니다.
-                stocks_string = ', '.join(stock_names)
-                # QLineEdit에 설정합니다.
-                self.portfolio.setText(stocks_string)
+            with self.file_lock:
+                with open('files/stock_hold.txt', 'r', encoding='utf-8') as file:
+                    stock_names = [line.strip() for line in file if line.strip()]
+                    # 주식명을 쉼표로 연결합니다.
+                    stocks_string = ', '.join(stock_names)
+                    # QLineEdit에 설정합니다.
+                    self.portfolio.setText(stocks_string)
         except Exception as e:
             print(f"Failed to load stock names: {e}")
 
         # 탐색 조건식
         try:
-            with open('files/search_condition_1.txt', 'r') as file:
-                self.search_condition_text_1 = file.read().strip()
-                self.lineEditSearchCondition.setText(self.search_condition_text_1)
-            with open('files/search_condition_2.txt', 'r') as file:
-                self.search_condition_text_2 = file.read().strip()
+            with self.file_lock:
+                with open('files/search_condition_1.txt', 'r') as file:
+                    self.search_condition_text_1 = file.read().strip()
+                    self.lineEditSearchCondition.setText(self.search_condition_text_1)
+                with open('files/search_condition_2.txt', 'r') as file:
+                    self.search_condition_text_2 = file.read().strip()
         except Exception as e:
             print(f"Error reading sell_condition.txt: {e}")
 
@@ -584,9 +603,10 @@ class MyMainWindow(QMainWindow):
     def load_companies_from_file(self, filename):
         companies = []
         try:
-            if os.path.exists(filename):
-                with open(filename, "r", encoding="utf8") as f:
-                    companies = [line.strip() for line in f if line]
+            with self.file_lock:
+                if os.path.exists(filename):
+                    with open(filename, "r", encoding="utf8") as f:
+                        companies = [line.strip() for line in f if line]
         except Exception as e:
             print(f"Error occurred while loading companies from file: {str(e)}")
         return companies
@@ -594,46 +614,48 @@ class MyMainWindow(QMainWindow):
     # 종목 업데이트
     def update_stocks(self, nation):
         try:
-            db_updater = DBUpdater_new.DBUpdater()
-            if nation in ["kr", "us", "all"]:
-                db_updater.update_comp_info(nation)
-                db_updater.update_daily_price(nation, 1)
-            elif nation == "stop":
-                db_updater.update_daily_price("stop")
+            with self.db_lock:
+                db_updater = DBUpdater_new.DBUpdater()
+                if nation in ["kr", "us", "all"]:
+                    db_updater.update_comp_info(nation)
+                    db_updater.update_daily_price(nation, 1)
+                elif nation == "stop":
+                    db_updater.update_daily_price("stop")
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
         except Exception as e:
             print(f"Error occurred while updating stocks: {str(e)}")
 
     def update_stock_price(self, company, period):
+        with self.db_lock:
+            mk = DBUpdater_new.MarketDB()
+            stock_list = mk.get_comp_info(company)         
 
-        mk = DBUpdater_new.MarketDB()
-        stock_list = mk.get_comp_info(company)         
+            val = stock_list[(stock_list['company'] == company) | (stock_list['code'] == company)]
+            code = val.iloc[0]['code']
+            company = val.iloc[0]['company']
 
-        val = stock_list[(stock_list['company'] == company) | (stock_list['code'] == company)]
-        code = val.iloc[0]['code']
-        company = val.iloc[0]['company']
-
-        db_updater = DBUpdater_new.DBUpdater()
-        if val.iloc[0]['country'] == 'kr':
-            df = db_updater.read_naver(code, period)
-        elif val.iloc[0]['country'] == 'us':
-            db_updater.ric_code()
-            df = db_updater.read_yfinance(code, period)
-        # df = df.dropna()
-        if df is not None:
-            db_updater.replace_into_db(df, 0, code, company)
+            db_updater = DBUpdater_new.DBUpdater()
+            if val.iloc[0]['country'] == 'kr':
+                df = db_updater.read_naver(code, period)
+            elif val.iloc[0]['country'] == 'us':
+                db_updater.ric_code()
+                df = db_updater.read_yfinance(code, period)
+            # df = df.dropna()
+            if df is not None:
+                db_updater.replace_into_db(df, 0, code, company)
 
     def update_specific_stock(self):
         try:
-            db_updater = DBUpdater_new.DBUpdater()
-            company = self.ent_stock.text()
-            if company == 'default':
-                db_updater.init_db()
-                db_updater.update_comp_info('all')
-                db_updater.update_daily_price('all', 2)
-            else:
-                self.update_stock_price(company, 2)
+            with self.db_lock:
+                db_updater = DBUpdater_new.DBUpdater()
+                company = self.ent_stock.text()
+                if company == 'default':
+                    db_updater.init_db()
+                    db_updater.update_comp_info('all')
+                    db_updater.update_daily_price('all', 2)
+                else:
+                    self.update_stock_price(company, 2)
         except FileNotFoundError as e:
             print(f"File not found: {str(e)}")
         except Exception as e:
@@ -641,12 +663,14 @@ class MyMainWindow(QMainWindow):
 
     # 종목 탐색
     def clear_search_file(self):
-        with open("files/stock_search.txt", "w", encoding="utf8") as f:
-            f.write("")
+        with self.file_lock:
+            with open("files/stock_search.txt", "w", encoding="utf8") as f:
+                f.write("")
 
     def write_to_search_file(self, company):
-        with open("files/stock_search.txt", "a", encoding="utf8") as f:
-            f.write(f"{company}\n")
+        with self.file_lock:
+            with open("files/stock_search.txt", "a", encoding="utf8") as f:
+                f.write(f"{company}\n")
 
     def search_stock(self, nation):
         self.clear_search_file()
@@ -654,8 +678,9 @@ class MyMainWindow(QMainWindow):
         self.analyze_and_save_results(stock_list)
 
     def prepare_stock_data(self, nation):
-        mk = DBUpdater_new.MarketDB()
-        stock_list = mk.get_comp_info()
+        with self.db_lock:
+            mk = DBUpdater_new.MarketDB()
+            stock_list = mk.get_comp_info()
         stock_list["len_code"] = stock_list.code.str.len()
 
         if nation in ["us", "kr"]:
@@ -679,9 +704,10 @@ class MyMainWindow(QMainWindow):
         for idx in range(len(stock_list)):
             if self.run:
                 company = stock_list["company"].values[idx]
-                mk = DBUpdater_new.MarketDB()
-                mk.get_comp_info()
-                df = mk.get_daily_price(company, "2022-01-01")
+                with self.db_lock:
+                    mk = DBUpdater_new.MarketDB()
+                    mk.get_comp_info()
+                    df = mk.get_daily_price(company, "2022-01-01")
 
                 df.MA20 = df.close.rolling(window=20).mean()
                 df.ENTOP = df.MA20 + df.MA20 * 0.1
@@ -749,14 +775,16 @@ class MyMainWindow(QMainWindow):
             self.write_list_to_file(filename, listbox)
 
     def append_to_file(self, filename, text):
-        with open(filename, "a", encoding="utf8") as f:
-            f.write("%s\n" % text)
+        with self.file_lock:
+            with open(filename, "a", encoding="utf8") as f:
+                f.write("%s\n" % text)
 
     def write_list_to_file(self, filename, listbox):
-        with open(filename, "w", encoding="utf8") as f:
-            for idx in range(listbox.count()):
-                company = listbox.item(idx).text()
-                f.write("%s\n" % company)
+        with self.file_lock:
+            with open(filename, "w", encoding="utf8") as f:
+                for idx in range(listbox.count()):
+                    company = listbox.item(idx).text()
+                    f.write("%s\n" % company)
 
     def btncmd2(self):
         try:
@@ -789,8 +817,9 @@ class MyMainWindow(QMainWindow):
     def find_stock(self):
         try:
             company = self.le_ent.text()
-            db_updater = DBUpdater_new.DBUpdater()
-            db_updater.update_daily_price("stop")
+            with self.db_lock:
+                db_updater = DBUpdater_new.DBUpdater()
+                db_updater.update_daily_price("stop")
             time.sleep(0.2)
             self.update_stock_price(company, 2)
             Thread(target=self.show_graph, args=(company,), daemon=True).start()
@@ -802,9 +831,10 @@ class MyMainWindow(QMainWindow):
 
     def show_graph(self, company):    
         try:
-            mk = DBUpdater_new.MarketDB()
-            mk.get_comp_info(company)
-            self.df = mk.get_daily_price(company, "2022-01-01")
+            with self.db_lock:
+                mk = DBUpdater_new.MarketDB()
+                mk.get_comp_info(company)
+                self.df = mk.get_daily_price(company, "2022-01-01")
             self.txt_company = company
 
             self.df["MA12"] = self.df["close"].rolling(window=12).mean()
@@ -858,8 +888,9 @@ class MyMainWindow(QMainWindow):
             self.error_detected = False
             self.error_message = ""
 
-            mk = DBUpdater_new.MarketDB()
-            stock_list = mk.get_comp_info()
+            with self.db_lock:
+                mk = DBUpdater_new.MarketDB()
+                stock_list = mk.get_comp_info()
             val = stock_list[(stock_list["company"] == company) | (stock_list["code"] == company)]
 
             if val.empty:

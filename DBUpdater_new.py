@@ -265,11 +265,14 @@ class DBUpdater:
         df['date'] = pd.to_datetime(df['date'])
         df = df.reset_index(drop=True)
 
-        for r in df.itertuples():
-            cursor.execute(
-                "REPLACE INTO daily_price VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (code, r.date.strftime('%Y-%m-%d'), r.open, r.high, r.low, r.close, r.volume)
-            )
+        data_to_insert = [
+            (code, r.date.strftime('%Y-%m-%d'), r.open, r.high, r.low, r.close, r.volume)
+            for r in df.itertuples()
+        ]
+        cursor.executemany(
+            "REPLACE INTO daily_price VALUES (?, ?, ?, ?, ?, ?, ?)",
+            data_to_insert
+        )
         self.conn.commit()
         cursor.close()
         print('[{}] #{:04d} {} ({}) : {}일 주가 업데이트 [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
@@ -351,81 +354,64 @@ class MarketDB:
         return bool(hangul_regex.search(text))
 
     def get_comp_info(self, company=None):
-        sql = "SELECT * FROM company_info"
-        stock_list = pd.read_sql(sql, self.conn)
+        if company:
+            # 특정 회사 정보만 조회하는 경우
+            sql = "SELECT * FROM company_info WHERE code = ? OR company = ?"
+            stock_list = pd.read_sql(sql, self.conn, params=(company, company))
+        else:
+            # 모든 회사 정보를 조회하는 경우
+            sql = "SELECT * FROM company_info"
+            stock_list = pd.read_sql(sql, self.conn)
 
         if company == 'default':
             return stock_list
         
-        stocks = []
-        
-        # 입력된 종목코드나 종목명이 없는 경우, 최신 종목 리스트에서 추가
-        if company:
-            if company not in stock_list['code'].values and company not in stock_list['company'].values:
-                print(f"{company}은(는) 새로운 종목입니다.")
+        # stock_list가 비어있고, company 인자가 있는 경우 (신규 종목 추가 로직)
+        if stock_list.empty and company:
+            print(f"{company}은(는) 새로운 종목입니다.")
+            stocks = []
+            if company.isdigit():  # 한국 증시 종목코드
+                code = company
+                company_name = stock.get_market_ticker_name(code)
+                if isinstance(company_name, pd.DataFrame) and company_name.empty:
+                    company_name = stock.get_etf_ticker_name(code)
+                stocks.append((code, company_name, 'kr'))
+            elif self.is_hangul(company):  # 한국 증시 종목명
+                code = self.get_krx_ticker_by_name(company)
+                company_name = company
+                stocks.append((code, company_name, 'kr'))
+            elif company.isalpha():  # 미국 증시 종목코드
+                code = company
+                stock_info = yf.Ticker(code)
+                company_info = stock_info.info
+                company_name = company_info.get('longName', 'N/A')
+                stocks.append((code, company_name, 'us'))
+            else:
+                print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
+                # 빈 DataFrame을 반환하여 이후 로직에서 오류가 발생하지 않도록 함
+                return pd.DataFrame()
 
-                if company.isdigit():  # 한국 증시 종목코드인 경우
-                    code = company
-                    company_name = stock.get_market_ticker_name(code)
-                    if isinstance(company_name, pd.DataFrame) and company_name.empty:
-                        company_name = stock.get_etf_ticker_name(code)
-                    stocks.append((code, company_name))
-
-                elif self.is_hangul(company):  # 한국 증시 종목명인 경우
-                    code = self.get_krx_ticker_by_name(company)
-                    company_name = company
-                    stocks.append((code, company_name))
-
-                elif company.isalpha():  # 미국 증시 종목코드인 경우
-                    code = company
-                    stock_info = yf.Ticker(code)
-                    company_info = stock_info.info
-                    company_name = company_info.get('longName', 'N/A')
-                    stocks.append((code, company_name))
-                else:
-                    print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
-                    return stock_list
-
-                df_stocks = pd.DataFrame(stocks, columns=['code', 'company'])
-
-                new_stock = df_stocks[['code', 'company']].copy()
-                new_stock['company'] = new_stock['company'].str.replace("'", "")
-                new_stock['company'] = new_stock['company'].str.replace("Inc.", "Inc", regex=False)
-                new_stock['company'] = new_stock['company'].str.replace("Co.", "Co", regex=False)
-                new_stock['company'] = new_stock['company'].str.replace("Corp.", "Corp", regex=False)
-                new_stock['company'] = new_stock['company'].str.replace("Corporation", "Corp", regex=False)
-                new_stock['company'] = new_stock['company'].str.replace(",", "", regex=False)
+            if stocks:
+                df_stocks = pd.DataFrame(stocks, columns=['code', 'company', 'country'])
+                
+                # 데이터 정제
+                new_stock = df_stocks.copy()
+                new_stock['company'] = new_stock['company'].str.replace("'", "").str.replace("Inc.", "Inc", regex=False).str.replace("Co.", "Co", regex=False).str.replace("Corp.", "Corp", regex=False).str.replace("Corporation", "Corp", regex=False).str.replace(",", "", regex=False)
                 new_stock['code'] = new_stock['code'].str.replace(".", "-", regex=False)
-              
-                today = datetime.today().strftime('%Y-%m-%d')
-                new_stock['last_update'] = today
-                if company.isdigit() or self.is_hangul(company):
-                    new_stock['country'] = 'kr'
-                else:
-                    new_stock['country'] = 'us'
-
-                # 새로운 종목을 stock_list에 추가
-                stock_list = pd.concat([stock_list, new_stock], ignore_index=True)
-
-                # 데이터베이스에 업데이트
-                cursor = self.conn.cursor()
-                code = new_stock.code.values[0]
-                company = new_stock.company.values[0]
-                today = new_stock.last_update.values[0]
-                nation = new_stock.country.values[0]
-                cursor.execute(
-                    "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
-                    (code, company, today, nation)
-                )
-                self.codes[code] = company
-                self.conn.commit()
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 주식 종목 업데이트 ({today}, {nation})")
+                new_stock['last_update'] = datetime.today().strftime('%Y-%m-%d')
+                
+                # 데이터베이스에 새로운 종목 정보 추가
+                new_stock.to_sql('company_info', self.conn, if_exists='append', index=False)
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 신규 주식 종목 추가 ({new_stock.iloc[0]['company']})")
+                
+                # 새로 추가된 종목 정보를 stock_list에 할당
+                stock_list = new_stock
 
         # self.codes 딕셔너리에 코드와 회사명 저장
         for idx in range(len(stock_list)):
             self.codes[stock_list['code'].values[idx]] = stock_list['company'].values[idx]
         return stock_list
-
+    
     def get_daily_price(self, code, start_date=None, end_date=None):
         if start_date is None:
             one_year_ago = datetime.today() - timedelta(days=365)
@@ -479,10 +465,17 @@ class MarketDB:
             code = codes_keys[idx]
         else:
             print(f"ValueError: Code({code}) doesn't exist.")
-            return
+            # 신규 종목일 수 있으므로 get_comp_info를 호출하여 DB에 추가 시도
+            self.get_comp_info(code)
+            # 재귀 호출 대신, 다시 한번 코드를 찾아봄
+            if code in self.codes:
+                pass # 성공적으로 추가됨
+            else:
+                 print(f"ValueError: Code({code}) still doesn't exist after attempting to add.")
+                 return pd.DataFrame() # 빈 DataFrame 반환
 
-        sql = f"SELECT * FROM daily_price WHERE code = '{code}' AND date >= '{start_date}' AND date <= '{end_date}'"
-        df = pd.read_sql(sql, self.conn)
+        sql = f"SELECT * FROM daily_price WHERE code = ? AND date >= ? AND date <= ?"
+        df = pd.read_sql(sql, self.conn, params=(code, start_date, end_date))
         df.index = df['date']
         return df
     
