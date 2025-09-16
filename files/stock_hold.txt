@@ -1,3 +1,4 @@
 카카오게임즈
-Nvidia Corp
 Tesla Inc
+Nvidia
+Palantir Technologies

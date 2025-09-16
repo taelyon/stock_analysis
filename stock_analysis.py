@@ -30,6 +30,7 @@ class MyMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         uic.loadUi('stock_analysis.ui', self)
+        self.webEngineView.setUrl(QtCore.QUrl("https://m.stock.naver.com/"))
 
         self.codes = {}
         self.run = True

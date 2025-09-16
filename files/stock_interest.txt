@@ -1,7 +1,6 @@
 삼성전자
-Microsoft Corp
 Apple Inc
 META
 GOOG
 IONQ
-Palantir Technologies Inc Class A
+Microsoft
