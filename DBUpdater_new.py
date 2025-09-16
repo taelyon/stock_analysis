@@ -1,487 +1,353 @@
 import sqlite3
-import pandas as pd
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from curl_cffi import requests
-import calendar
-from threading import Timer
-import yfinance as yf
-# requests.packages.urllib3.disable_warnings()
-import warnings
-warnings.filterwarnings('ignore')
+import pandas as pd
+import FinanceDataReader as fdr
+from bs4 import BeautifulSoup
+import requests
 import re
-from pykrx import stock
+import yfinance as yf
+from tqdm import tqdm
+import exchange_calendars as xcals
+import warnings
+import threading
+import time
 
-class DBUpdater:
-    try:
-        def __init__(self):
-            # SQLite 데이터베이스 연결
-            self.conn = sqlite3.connect('investar.db')
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS company_info (
-                    code TEXT PRIMARY KEY,
-                    company TEXT NOT NULL,
-                    last_update DATE,
-                    country TEXT NOT NULL
-                )
-            """)
-            self.conn.execute("""
-                CREATE TABLE IF NOT EXISTS daily_price (
-                    code TEXT NOT NULL,
-                    date DATE NOT NULL,
-                    open REAL,
-                    high REAL,
-                    low REAL,
-                    close REAL,
-                    volume INTEGER,
-                    PRIMARY KEY (code, date)
-                )
-            """)
-            self.conn.commit()
-            self.codes = dict()
+warnings.filterwarnings('ignore')
 
-        def __del__(self):
-            pass
+class DBManager:
+    """ 각 스레드가 독립적인 DB 연결을 갖도록 관리하는 기반 클래스 """
+    def __init__(self):
+        self.thread_local = threading.local()
 
-        def init_db(self):
-            self.conn = sqlite3.connect('investar.db')
-            cursor = self.conn.cursor()
+    def _get_db_conn(self):
+        """ 현재 스레드에 대한 DB 연결 및 커서를 가져오거나 생성합니다. """
+        if not hasattr(self.thread_local, 'conn'):
+            self.thread_local.conn = sqlite3.connect('investar.db')
+            self.thread_local.cur = self.thread_local.conn.cursor()
+        return self.thread_local.conn, self.thread_local.cur
 
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = cursor.fetchall()
+    def close_db_conn(self):
+        """ 현재 스레드의 DB 연결을 닫습니다. (필요시 사용) """
+        if hasattr(self.thread_local, 'conn'):
+            self.thread_local.conn.close()
+            del self.thread_local.conn
+            del self.thread_local.cur
 
-            for table in tables:
-                cursor.execute(f"DELETE FROM {table[0]};")
-                self.conn.commit()
+class DBUpdater(DBManager):
+    def __init__(self):
+        """생성자: DB 연결 및 테이블 생성/검증"""
+        super().__init__()
+        conn, cur = self._get_db_conn()
+        self.create_tables(conn, cur)
+        self.ric_codes = {}
+        self.run_update = True
 
-            cursor.close()
-
-        def read_krx_code(self):
-            result = []
-            for sosok in range(2):
-                page_range = 8 if sosok == 0 else 4
-                for page in range(1, page_range):
-                    url = f"https://finance.naver.com/sise/sise_market_sum.nhn?sosok={sosok}&page={page}"
-                    data = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-                    bsObj = BeautifulSoup(data.text, "html.parser")
-                    type_2 = bsObj.find("table", {"class": "type_2"})
-                    trs = type_2.find("tbody").findAll("tr")
-
-                    for tr in trs:
-                        try:
-                            tds = tr.findAll("td")
-                            if len(tds) > 1:
-                                aTag = tds[1].find("a")
-                                stock_code = aTag['href'].split('=')[-1]
-                                stock_name = aTag.text.strip()
-                                result.append({"code": stock_code, "company": stock_name})
-                        except Exception as e:
-                            continue
-            krx = pd.DataFrame(result, columns=['code', 'company'])
-            return krx
-
-        def read_spx_code(self):
-            url = f'https://www.slickcharts.com/sp500'
-            r = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-            spx = pd.read_html(r.text)[0]
-            spx = spx.rename(columns={'Symbol': 'code', 'Company': 'company'})
-            spx = spx[['code', 'company']]
-            spx['company'] = spx['company'].str.replace("'", "")
-            spx['company'] = spx['company'].str.replace("Inc.", "Inc", regex=False)
-            spx['company'] = spx['company'].str.replace("Co.", "Co", regex=False)
-            spx['company'] = spx['company'].str.replace("Corp.", "Corp", regex=False)
-            spx['company'] = spx['company'].str.replace("Corporation", "Corp", regex=False)
-            spx['company'] = spx['company'].str.replace(",", "", regex=False)
-            spx['code'] = spx['code'].str.replace(".", "-", regex=False)
-            return spx
-
-        def update_comp_info(self, nation):
-            sql = "SELECT * FROM company_info"
-            df = pd.read_sql(sql, self.conn)
-            for idx in range(len(df)):
-                self.codes[df['code'].values[idx]] = df['company'].values[idx]
-
-            today = datetime.today().strftime('%Y-%m-%d')
-
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT last_update FROM company_info")
-            rs = cursor.fetchone()
-
-            if nation == 'kr':
-                if rs is None or rs[0] < today:
-                    print('한국 주식 종목 업데이트 시작')
-                    krx = self.read_krx_code()
-                    for idx in range(len(krx)):
-                        code = krx.code.values[idx]
-                        company = krx.company.values[idx]
-                        cursor.execute(
-                            "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
-                            (code, company, today, nation)
-                        )
-                        self.codes[code] = company
-                    self.conn.commit()
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 한국 주식 종목 업데이트 완료 ({today}, {nation})")
-                    print('')
-
-            elif nation == 'us':
-                if rs is None or rs[0] < today:
-                    print('미국 주식 종목 업데이트 시작')
-                    spx = self.read_spx_code()
-                    for idx in range(len(spx)):
-                        code = spx.code.values[idx]
-                        company = spx.company.values[idx]
-                        cursor.execute(
-                            "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
-                            (code, company, today, nation)
-                        )
-                        self.codes[code] = company
-                    self.conn.commit()
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 미국 주식 종목 업데이트 완료 ({today}, {nation})")
-                    print('')
-
-            elif nation == 'all':
-                if rs is None or rs[0] < today:
-                    print('전체 주식 종목 업데이트 시작')
-                    krx = self.read_krx_code()
-                    for idx in range(len(krx)):
-                        code = krx.code.values[idx]
-                        company = krx.company.values[idx]
-                        cursor.execute(
-                            "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
-                            (code, company, today, 'kr')
-                        )
-                        self.codes[code] = company
-
-                    spx = self.read_spx_code()
-                    for idx in range(len(spx)):
-                        code = spx.code.values[idx]
-                        company = spx.company.values[idx]
-                        cursor.execute(
-                            "REPLACE INTO company_info (code, company, last_update, country) VALUES (?, ?, ?, ?)",
-                            (code, company, today, 'us')
-                        )
-                        self.codes[code] = company
-                    self.conn.commit()
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 전체 주식 종목 업데이트 완료 ({today}, {nation})")
-                    print('')
-
-            cursor.close()
-
-        def read_naver(self, code, period):
-            try:
-                if period == 1:
-                    url = f'https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=5&requestType=0'
-                elif period == 2:
-                    url = f'https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=500&requestType=0'
-                req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-                soup = BeautifulSoup(req.text, "lxml")
-                stock_soup = soup.find_all('item')
-
-                stock_date = []
-                for stock in stock_soup:
-                    stock_date.append(stock['data'].split('|'))
-
-                df = pd.DataFrame(stock_date)
-                df.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
-                df[['open', 'high', 'low', 'close', 'volume']] = df[['open', 'high', 'low', 'close', 'volume']].apply(
-                    pd.to_numeric, errors='coerce').fillna(0)
-                df['date'] = pd.to_datetime(df['date'])
-            except Exception as e:
-                print('Exception occured:', str(e))
-                return None
-            return df
-
-        def ric_code(self):
-            result = []
-            url = 'https://blog.naver.com/PostView.naver?blogId=taelyon&logNo=222768959654'
-            req = requests.get(url, headers={'User-agent': 'Mozilla/5.0'}, verify=False)
-            soup = BeautifulSoup(req.text, features="lxml")
-            box_type_l = soup.find("div", {"class": "se-table-container"})
-            type_2 = box_type_l.find("table", {"class": "se-table-content"})
-            tbody = type_2.find("tbody")
-            trs = tbody.findAll("tr")
-            stockInfos = []
-            for tr in trs:
-                try:
-                    tds = tr.findAll("td")
-                    code = tds[0].text[1:-1]
-                    ric = tds[1].text[1:-1]
-                    company = tds[2].text[1:-1]
-                    stockInfo = {"code": code, "ric": ric, "company": company}
-                    stockInfos.append(stockInfo)
-                except Exception as e:
-                    pass
-            list = stockInfos
-            result += list
-
-            df_ric = pd.DataFrame(result)
-            df_ric = df_ric.drop(df_ric.index[0])
-            return df_ric
+    def create_tables(self, conn, cur):
+        """DB에 필요한 테이블 생성 (없을 경우) 및 스키마 검증"""
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_price'")
+        table_exists = cur.fetchone()
+        recreate_daily_price = False
+        if table_exists:
+            cur.execute("PRAGMA table_info(daily_price)")
+            columns = [info[1] for info in cur.fetchall()]
+            expected_columns = ['code', 'date', 'open', 'high', 'low', 'close', 'diff', 'volume']
+            if sorted(columns) != sorted(expected_columns):
+                print("daily_price 테이블 스키마가 변경되어 테이블을 삭제합니다.")
+                cur.execute("DROP TABLE daily_price")
+                recreate_daily_price = True
         
-        def read_yfinance(self, code, period):
-            try:
-                if period == 1:
-                    start_date = datetime.today() - timedelta(days=10)
-                elif period == 2:
-                    start_date = datetime(2024, 1, 1)
-                else:
-                    print("Invalid period. Choose 1 for the last week or 2 for data since 2024.")
-                    return None
+        if not table_exists or recreate_daily_price:
+            print("daily_price 테이블을 생성합니다.")
+            sql_daily_price = """
+                CREATE TABLE daily_price (
+                    code TEXT, date TEXT, open REAL, high REAL, low REAL, close REAL, diff REAL, volume INTEGER,
+                    PRIMARY KEY (code, date)
+                );"""
+            cur.execute(sql_daily_price)
 
-                session = requests.Session(impersonate="chrome")
-                session.verify = False
+        sql_comp_info = """
+            CREATE TABLE IF NOT EXISTS comp_info (
+                code TEXT PRIMARY KEY, company TEXT, market TEXT, country TEXT, updated_date TEXT
+            );"""
+        cur.execute(sql_comp_info)
+        conn.commit()
 
-                stock_data = yf.download(code, start=start_date, end=datetime.today(), progress=False, session=session, auto_adjust=True)
-                stock_data.columns = stock_data.columns.get_level_values(0)
-                stock_data.columns.name = None
+    def init_db(self, table_name='daily_price'):
+        conn, cur = self._get_db_conn()
+        cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        if cur.fetchone() is not None:
+            cur.execute(f"DROP TABLE {table_name}")
+            conn.commit()
+            print(f"'{table_name}' 테이블이 성공적으로 삭제되었습니다.")
+        else:
+            print(f"'{table_name}' 테이블이 존재하지 않습니다.")
 
-                stock_data['date'] = stock_data.index.strftime('%Y-%m-%d')
-                stock_data.reset_index(drop=True, inplace=True)
+    def krx_stock_listing(self):
+        conn, cur = self._get_db_conn()
+        krx_list = fdr.StockListing('KRX-MARCAP')
+        krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
+        krx_list = krx_list.head(500)
+        krx_list['Country'] = 'kr'
+        krx_list = krx_list[['Code', 'Name', 'Market', 'Country']]
+        krx_list = krx_list.rename(columns={'Code': 'code', 'Name': 'company', 'Market': 'market', 'Country': 'country'})
+        
+        today = datetime.today().strftime('%Y-%m-%d')
+        krx_list['updated_date'] = today
 
-                columns = ['date', 'Open', 'High', 'Low', 'Close', 'Volume']
-                stock_data = stock_data[columns]
-                stock_data.rename(columns={
-                    'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'
-                }, inplace=True)
-                stock_data = stock_data[['date', 'open', 'high', 'low', 'close', 'volume']].dropna()
+        for r in krx_list.itertuples():
+            sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', \"{r.company.replace('"', '""')}\", '{r.market}', '{r.country}', '{r.updated_date}')"
+            cur.execute(sql)
+        conn.commit()
+        
+    def us_stock_listing(self):
+        conn, cur = self._get_db_conn()
+        try:
+            url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+            headers = {'User-agent': 'Mozilla/5.0'}
+            response = requests.get(url, headers=headers)
+            sp500_list = pd.read_html(response.text)[0]
+            sp500_list = sp500_list[['Symbol', 'Security']].rename(columns={'Symbol': 'code', 'Security': 'company'})
+            sp500_list['market'] = 'S&P500'
+        except Exception as e:
+            print(f"S&P 500 목록을 가져오는 데 실패했습니다: {e}")
+            return
 
-                if period == 1:
-                    return stock_data.iloc[-5:]
+        sp500_list['country'] = 'us'
+        today = datetime.today().strftime('%Y-%m-%d')
+        sp500_list['updated_date'] = today
 
-                return stock_data
+        for r in sp500_list.itertuples():
+            company_name = r.company.replace("'", "''")
+            sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', '{company_name}', '{r.market}', '{r.country}', '{r.updated_date}')"
+            cur.execute(sql)
+        conn.commit()
 
-            except requests.ConnectionError as e:
-                print(f"Connection error occurred: {e}")
-            except requests.Timeout as e:
-                print(f"Request timed out: {e}")
-            except Exception as e:
-                print(f"An unexpected error occurred: {e}")
+    def update_comp_info(self, nation='all'):
+        conn, cur = self._get_db_conn()
+        today = datetime.today().strftime('%Y-%m-%d')
 
+        if nation in ['all', 'kr']:
+            sql = "SELECT max(updated_date) FROM comp_info WHERE country = 'kr'"
+            cur.execute(sql)
+            rs = cur.fetchone()
+            
+            if rs is None or rs[0] is None or rs[0] < today:
+                print("한국 주식 목록을 업데이트합니다.")
+                self.krx_stock_listing()
+            else:
+                print("한국 주식 목록은 최신 상태입니다.")
+
+        if nation in ['all', 'us']:
+            sql = "SELECT max(updated_date) FROM comp_info WHERE country = 'us'"
+            cur.execute(sql)
+            rs = cur.fetchone()
+            
+            if rs is None or rs[0] is None or rs[0] < today:
+                print("미국 주식 목록을 업데이트합니다.")
+                self.us_stock_listing()
+            else:
+                print("미국 주식 목록은 최신 상태입니다.")
+
+    def read_naver(self, code, company, pages_to_fetch):
+        df = pd.DataFrame()
+        for page in range(1, pages_to_fetch + 1):
+            page_df = self._read_naver_page(code, page)
+            if page_df is None:
+                break
+            
+            df = pd.concat([df, page_df], ignore_index=True)
+            if not page_df['날짜'].empty and pd.to_datetime(page_df['날짜'].iloc[-1]) < datetime(2024, 1, 1):
+                break
+        
+        if df.empty:
             return None
 
-        def replace_into_db(self, df, num, code, company):
-            cursor = self.conn.cursor()
-            
-            # 날짜 열을 datetime 형식으로 변환
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.reset_index(drop=True)
+        df.dropna(inplace=True)
+        df = df.rename(columns={'날짜': 'date', '종가': 'close', '전일비': 'diff',
+                                '시가': 'open', '고가': 'high', '저가': 'low', '거래량': 'volume'})
+        
+        # [FIX] 데이터 클리닝 및 타입 변환 로직 (float 경유)
+        is_negative = df['diff'].astype(str).str.contains('하락')
+        df['diff'] = df['diff'].astype(str).str.replace(r'[^0-9]', '', regex=True)
+        df['diff'] = pd.to_numeric(df['diff'], errors='coerce').fillna(0).astype(int)
+        df.loc[is_negative, 'diff'] *= -1
+        
+        for col in ['close', 'open', 'high', 'low', 'volume']:
+            clean_str = df[col].astype(str).str.replace(',', '')
+            numeric_val = pd.to_numeric(clean_str, errors='coerce').fillna(0)
+            df[col] = numeric_val.astype(int)
 
-            data_to_insert = [
-                (code, r.date.strftime('%Y-%m-%d'), r.open, r.high, r.low, r.close, r.volume)
-                for r in df.itertuples()
-            ]
-            cursor.executemany(
-                "REPLACE INTO daily_price VALUES (?, ?, ?, ?, ?, ?, ?)",
-                data_to_insert
-            )
-            self.conn.commit()
-            cursor.close()
-            print('[{}] #{:04d} {} ({}) : {}일 주가 업데이트 [OK]'.format(datetime.now().strftime('%Y-%m-%d %H:%M'), num+1, company, code, len(df)))
+        df['date'] = pd.to_datetime(df['date'])
+        df = df[df['date'] >= datetime(2024,1,1)]
+        df = df.sort_values(by='date', ascending=True)
+        return df
 
-        def update_daily_price(self, nation, period=None):
-            self.codes = dict()
+    def _read_naver_page(self, code, page, retries=3):
+        url = f"https://finance.naver.com/item/sise_day.nhn?code={code}&page={page}"
+        headers = {'User-agent': 'Mozilla/5.0'}
+        for i in range(retries):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                
+                tables = pd.read_html(response.text, header=0)
+                if not tables or tables[0].empty:
+                    return None
 
-            if nation in ['kr', 'us', 'all']:
-                sql = f"SELECT code, company FROM company_info WHERE country = ? OR ? = 'all'"
-                df = pd.read_sql(sql, self.conn, params=(nation, nation))
-                for idx, row in df.iterrows():
-                    self.codes[row['code']] = row['company']
+                page_df = tables[0]
+                page_df.dropna(inplace=True)
+                return page_df if not page_df.empty else None
 
-            global run
-            run = True
-            if nation == 'stop':
-                run = False
-
-            for idx, code in enumerate(self.codes):
-                if run:
-                    if nation == 'kr' and len(code) >= 6:
-                        df = self.read_naver(code, period)
-                    elif nation == 'us' and len(code) < 6:
-                        df = self.read_yfinance(code, period)
-                    elif nation == 'all':
-                        if len(code) >= 6:
-                            df = self.read_naver(code, period)   # For initial run, change to 2 to update
-                        else:
-                            df = self.read_yfinance(code, period) # For initial run, change to 2 to update
-                    else:
-                        continue
-
-                    if df is None:
-                        continue
-
-                    self.replace_into_db(df, idx, code, self.codes[code])
-
-        def execute_daily(self):
-            self.update_comp_info('all')
-            self.update_daily_price('all', 1)
-
-            tmnow = datetime.now()
-            lastday = calendar.monthrange(tmnow.year, tmnow.month)[1]
-            if tmnow.month == 12 and tmnow.day == lastday:
-                tmnext = tmnow.replace(year=tmnow.year+1, month=1, day=1, hour=17, minute=0, second=0)
-            elif tmnow.day == lastday:
-                tmnext = tmnow.replace(month=tmnow.month+1, day=1, hour=17, minute=0, second=0)
-            else:
-                tmnext = tmnow.replace(day=tmnow.day+1, hour=17, minute=0, second=0)
-            tmdiff = tmnext - tmnow
-            secs = tmdiff.seconds
-
-            t = Timer(secs, self.execute_daily)
-            print("Waiting for next update ({}) ...".format(tmnext.strftime('%Y-%m-%d %H:%M')))
-            t.start()
-    except Exception as e:
-        print(f"DBUpdater initialization error: {e}")
-
-class MarketDB:
-    def __init__(self):
-        # SQLite3용 SQLAlchemy 엔진 생성
-        self.conn = sqlite3.connect('investar.db')
-        self.codes = {}
-
-    def __del__(self):
-        pass
-
-    def get_krx_ticker_by_name(self, name):
-        tickers = stock.get_market_ticker_list(market="ALL")
-        for ticker in tickers:
-            if stock.get_market_ticker_name(ticker) == name:
-                return ticker
-        tickers = stock.get_etf_ticker_list()  # ETF
-        for ticker in tickers:
-            if stock.get_etf_ticker_name(ticker) == name:
-                return ticker
+            except Exception:
+                time.sleep(0.5)
         return None
 
-    def is_hangul(self, text):
-        hangul_regex = re.compile('[\u3131-\u3163\uac00-\ud7a3]')
-        return bool(hangul_regex.search(text))
-
-    def get_comp_info(self, company=None):
-        if company:
-            # 특정 회사 정보만 조회하는 경우
-            sql = "SELECT * FROM company_info WHERE code = ? OR company = ?"
-            stock_list = pd.read_sql(sql, self.conn, params=(company, company))
+    def read_yfinance(self, code, period=2):
+        end_date = datetime.today() + timedelta(days=1)
+        if period == 1:
+            start_date = end_date - timedelta(days=20)
         else:
-            # 모든 회사 정보를 조회하는 경우
-            sql = "SELECT * FROM company_info"
-            stock_list = pd.read_sql(sql, self.conn)
+            start_date = datetime(2024, 1, 1)
 
-        if company == 'default':
-            return stock_list
+        return self._download_with_retry(code, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+
+    def _download_with_retry(self, code, start, end):
+        try:
+            df = yf.download(code, start=start, end=end, progress=False)
+            if df.empty: raise ValueError("Empty DataFrame")
+            return df
+        except Exception:
+            if '.' in code:
+                code_alt = code.replace('.', '-')
+                try:
+                    df = yf.download(code_alt, start=start, end=end, progress=False)
+                    if df.empty: raise ValueError("Empty DataFrame after retry")
+                    return df
+                except Exception: return None
+        return None
+
+    def replace_into_db(self, df, code):
+        conn, cur = self._get_db_conn()
+        if 'diff' not in df.columns:
+            df['diff'] = df['close'].diff().fillna(0)
+            
+        try:
+            df['open'] = df['open'].astype(float)
+            df['high'] = df['high'].astype(float)
+            df['low'] = df['low'].astype(float)
+            df['close'] = df['close'].astype(float)
+            df['diff'] = df['diff'].astype(float)
+            df['volume'] = df['volume'].astype(int)
+        except Exception as e:
+            print(f"데이터 타입 변환 중 오류 ({code}): {e}")
+            return
+
+        for r in df.itertuples():
+            date_str = r.Index.strftime('%Y-%m-%d')
+            sql = (f"REPLACE INTO daily_price (code, date, open, high, low, close, diff, volume) "
+                   f"VALUES ('{code}', '{date_str}', '{r.open}', '{r.high}', '{r.low}', '{r.close}', '{r.diff}', '{r.volume}')")
+            cur.execute(sql)
+        conn.commit()
+
+    def update_daily_price(self, nation='all', period=1):
+        conn, cur = self._get_db_conn()
+        if nation == 'stop':
+            self.run_update = False
+            return
+        self.run_update = True
         
-        # stock_list가 비어있고, company 인자가 있는 경우 (신규 종목 추가 로직)
-        if stock_list.empty and company:
-            print(f"{company}은(는) 새로운 종목입니다.")
-            stocks = []
-            if company.isdigit():  # 한국 증시 종목코드
-                code = company
-                company_name = stock.get_market_ticker_name(code)
-                if isinstance(company_name, pd.DataFrame) and company_name.empty:
-                    company_name = stock.get_etf_ticker_name(code)
-                stocks.append((code, company_name, 'kr'))
-            elif self.is_hangul(company):  # 한국 증시 종목명
-                code = self.get_krx_ticker_by_name(company)
-                company_name = company
-                stocks.append((code, company_name, 'kr'))
-            elif company.isalpha():  # 미국 증시 종목코드
-                code = company
-                stock_info = yf.Ticker(code)
-                company_info = stock_info.info
-                company_name = company_info.get('longName', 'N/A')
-                stocks.append((code, company_name, 'us'))
-            else:
-                print(f"{company}에 해당하는 종목을 찾을 수 없습니다.")
-                # 빈 DataFrame을 반환하여 이후 로직에서 오류가 발생하지 않도록 함
-                return pd.DataFrame()
+        if nation in ['kr', 'all']:
+            cur.execute("SELECT code, company FROM comp_info WHERE country = 'kr'")
+            for code, company in tqdm(cur.fetchall(), desc="KR 주식 업데이트 중"):
+                if not self.run_update: break
+                df = self.read_naver(code, company, 1 if period == 1 else 500)
+                if df is not None and not df.empty:
+                    df.set_index('date', inplace=True)
+                    self.replace_into_db(df, code)
 
-            if stocks:
-                df_stocks = pd.DataFrame(stocks, columns=['code', 'company', 'country'])
-                
-                # 데이터 정제
-                new_stock = df_stocks.copy()
-                new_stock['company'] = new_stock['company'].str.replace("'", "").str.replace("Inc.", "Inc", regex=False).str.replace("Co.", "Co", regex=False).str.replace("Corp.", "Corp", regex=False).str.replace("Corporation", "Corp", regex=False).str.replace(",", "", regex=False)
-                new_stock['code'] = new_stock['code'].str.replace(".", "-", regex=False)
-                new_stock['last_update'] = datetime.today().strftime('%Y-%m-%d')
-                
-                # 데이터베이스에 새로운 종목 정보 추가
-                new_stock.to_sql('company_info', self.conn, if_exists='append', index=False)
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] 신규 주식 종목 추가 ({new_stock.iloc[0]['company']})")
-                
-                # 새로 추가된 종목 정보를 stock_list에 할당
-                stock_list = new_stock
-
-        # self.codes 딕셔너리에 코드와 회사명 저장
-        for idx in range(len(stock_list)):
-            self.codes[stock_list['code'].values[idx]] = stock_list['company'].values[idx]
-        return stock_list
+        if nation in ['us', 'all']:
+            cur.execute("SELECT code, company FROM comp_info WHERE country = 'us'")
+            for code, company in tqdm(cur.fetchall(), desc="US 주식 업데이트 중"):
+                if not self.run_update: break
+                df = self.read_yfinance(code, period)
+                if df is not None and not df.empty:
+                    df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
+                    self.replace_into_db(df, code)
+        print("일별 시세 업데이트 완료.")
     
-    def get_daily_price(self, code, start_date=None, end_date=None):
-        if start_date is None:
-            one_year_ago = datetime.today() - timedelta(days=365)
-            start_date = one_year_ago.strftime('%Y-%m-%d')
-            print(f"start_date is initialized to '{start_date}'")
-        else:
-            start_lst = re.split(r'\D+', start_date)
-            if start_lst[0] == '':
-                start_lst = start_lst[1:]
-            start_year = int(start_lst[0])
-            start_month = int(start_lst[1])
-            start_day = int(start_lst[2])
-            if start_year < 1900 or start_year > 2200:
-                print(f"ValueError: start_year({start_year:d}) is wrong.")
-                return
-            if start_month < 1 or start_month > 12:
-                print(f"ValueError: start_month({start_month:d}) is wrong.")
-                return
-            if start_day < 1 or start_day > 31:
-                print(f"ValueError: start_day({start_day:d}) is wrong.")
-                return
-            start_date = f"{start_year:04d}-{start_month:02d}-{start_day:02d}"
+    def update_single_stock_all_data(self, company):
+        mdb = MarketDB()
+        comp_info = mdb.get_comp_info(company)
+        
+        if comp_info.empty:
+            print(f"'{company}' 종목을 찾을 수 없습니다. 종목 목록을 먼저 업데이트 해주세요.")
+            return
 
-        if end_date is None:
-            end_date = datetime.today().strftime('%Y-%m-%d')
-            print(f"end_date is initialized to '{end_date}'")
-        else:
-            end_lst = re.split(r'\D+', end_date)
-            if end_lst[0] == '':
-                end_lst = end_lst[1:]
-            end_year = int(end_lst[0])
-            end_month = int(end_lst[1])
-            end_day = int(end_lst[2])
-            if end_year < 1800 or end_year > 2200:
-                print(f"ValueError: end_year({end_year:d}) is wrong.")
-                return
-            if end_month < 1 or end_month > 12:
-                print(f"ValueError: end_month({end_month:d}) is wrong.")
-                return
-            if end_day < 1 or end_day > 31:
-                print(f"ValueError: end_day({end_day:d}) is wrong.")
-                return
-            end_date = f"{end_year:04d}-{end_month:02d}-{end_day:02d}"
+        code = comp_info.iloc[0]['code']
+        country = comp_info.iloc[0]['country']
+        
+        df = None
+        if country == 'kr':
+            df = self.read_naver(code, company, pages_to_fetch=500)
+            if df is not None and not df.empty:
+                df.set_index('date', inplace=True)
+        elif country == 'us':
+            df = self.read_yfinance(code, period=2)
+            if df is not None and not df.empty:
+                df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
 
-        codes_keys = list(self.codes.keys())
-        codes_values = list(self.codes.values())
-        if code in codes_keys:
-            pass
-        elif code in codes_values:
-            idx = codes_values.index(code)
-            code = codes_keys[idx]
+        if df is not None and not df.empty:
+            self.replace_into_db(df, code)
+            print(f"'{company}' ({code})의 업데이트를 완료했습니다.")
         else:
-            print(f"ValueError: Code({code}) doesn't exist.")
-            # 신규 종목일 수 있으므로 get_comp_info를 호출하여 DB에 추가 시도
-            self.get_comp_info(code)
-            # 재귀 호출 대신, 다시 한번 코드를 찾아봄
-            if code in self.codes:
-                pass # 성공적으로 추가됨
-            else:
-                 print(f"ValueError: Code({code}) still doesn't exist after attempting to add.")
-                 return pd.DataFrame() # 빈 DataFrame 반환
+            print(f"'{company}' ({code})의 데이터를 가져오는 데 실패했습니다.")
 
-        sql = f"SELECT * FROM daily_price WHERE code = ? AND date >= ? AND date <= ?"
-        df = pd.read_sql(sql, self.conn, params=(code, start_date, end_date))
-        df.index = df['date']
+    def run_default_reset(self):
+        self.init_db('comp_info')
+        self.create_tables(*self._get_db_conn())
+        self.execute_daily()
+
+    def execute_daily(self):
+        self.update_comp_info('all')
+        self.update_daily_price('all', 1)
+        self.close_db_conn()
+
+class MarketDB(DBManager):
+    def get_comp_info(self, company=None):
+        conn, cur = self._get_db_conn()
+        if company:
+            company_safe = company.replace("'", "''").lower()
+            sql = f"SELECT * FROM comp_info WHERE lower(company) LIKE '%{company_safe}%' or lower(code) = '{company_safe}'"
+        else:
+            sql = "SELECT * FROM comp_info"
+        return pd.read_sql(sql, conn)
+
+    def get_daily_price(self, company, start_date=None, end_date=None):
+        comp_info = self.get_comp_info(company)
+        if comp_info.empty:
+            return pd.DataFrame()
+            
+        code = comp_info.iloc[0]['code']
+        name = comp_info.iloc[0]['company']
+        print(f"일별 시세 조회 중: {name} ({code})")
+        
+        conn, cur = self._get_db_conn()
+        
+        if start_date and end_date:
+            sql = f"SELECT * FROM daily_price WHERE code = '{code}' AND date BETWEEN '{start_date}' AND '{end_date}'"
+        elif start_date:
+            sql = f"SELECT * FROM daily_price WHERE code = '{code}' AND date >= '{start_date}'"
+        else:
+            sql = f"SELECT * FROM daily_price WHERE code = '{code}'"
+        
+        df = pd.read_sql(sql, conn)
+        if not df.empty:
+            df.index = pd.to_datetime(df.date)
         return df
-    
+
 if __name__ == '__main__':
     dbu = DBUpdater()
+    # dbu.init_db('comp_info') 
+    # dbu.create_tables(*self._get_db_conn())
     dbu.execute_daily()
+

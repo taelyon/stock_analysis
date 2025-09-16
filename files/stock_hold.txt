@@ -2,3 +2,6 @@
 Tesla Inc
 Palantir Technologies
 NVIDIA Corp
+Microsoft
+Edison International
+Intuit

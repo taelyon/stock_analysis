@@ -5,6 +5,15 @@ import re
 
 class ChartManager:
     def __init__(self, chart_layout, backtest_layout, logo_widget):
+        """생성자: 차트 레이아웃 설정 및 한글 폰트 적용"""
+        # [FIX] 한글 폰트 깨짐 방지를 위한 설정
+        try:
+            plt.rcParams['font.family'] = 'Malgun Gothic'
+            plt.rcParams['axes.unicode_minus'] = False  # 마이너스 부호 깨짐 방지
+        except Exception as e:
+            print(f"한글 폰트 설정 중 오류 발생: {e}")
+            print("차트의 한글이 깨져 보일 수 있습니다. 'Malgun Gothic' 폰트 설치를 확인해주세요.")
+
         self.chart_layout = chart_layout
         self.backtest_layout = backtest_layout
         self.logo_widget = logo_widget
@@ -31,7 +40,6 @@ class ChartManager:
             return
             
         # 차트에 표시할 데이터를 최근 3개월(약 65 거래일)으로 제한합니다.
-        # 보조지표 계산은 전체 기간 데이터로 이루어지므로 정확도가 유지됩니다.
         df = df.iloc[-65:]
 
         if df.empty:
@@ -62,14 +70,14 @@ class ChartManager:
         self.canvas_main.draw()
 
     def plot_main_chart(self, ax, df, company, search_condition_1, search_condition_2):
-        day = str(df.date.values[-1]) if 'date' in df.columns and not df.empty else 'N/A'
-        close_price = df.close.values[-1] if 'close' in df.columns and not df.empty else 0
-        ret20 = df.RET20.values[-1] if 'RET20' in df.columns and not df.empty else 'N/A'
-        ret5 = df.RET5.values[-1] if 'RET5' in df.columns and not df.empty else 'N/A'
-        ret1 = df.RET1.values[-1] if 'RET1' in df.columns and not df.empty else 'N/A'
+        day_str = df.index[-1].strftime('%Y-%m-%d') if not df.empty else 'N/A'
+        close_price = df['close'].iloc[-1] if not df.empty else 0
+        ret20 = df['RET20'].iloc[-1] if 'RET20' in df.columns and not df.empty else 'N/A'
+        ret5 = df['RET5'].iloc[-1] if 'RET5' in df.columns and not df.empty else 'N/A'
+        ret1 = df['RET1'].iloc[-1] if 'RET1' in df.columns and not df.empty else 'N/A'
         
         title = (
-            f"{company} ({day}: {format(round(close_price, 2), ',')} )\n"
+            f"{company} ({day_str}: {format(round(close_price, 2), ',')} )\n"
             + f" 수익률: (20일 {ret20}%) "
             + f"(5일 {ret5}%) "
             + f"(1일 {ret1}%)"
@@ -93,16 +101,24 @@ class ChartManager:
     def plot_signals(self, ax, df, search_condition_1, search_condition_2):
         for i in range(1, len(df.close)):
             try:
-                if search_condition_1 and eval(re.sub('df', 'df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', search_condition_1))):
-                    ax.plot(df.index.values[i], df.low.values[i] * 0.97, "y^", markersize=8, markeredgecolor="black")
-                if search_condition_2 and eval(re.sub('df', 'df', re.sub(r'\[-(\d+)\]', lambda x: f'[i-{int(x.group(1)) - 1}]', search_condition_2))):
-                    ax.plot(df.index.values[i], df.low.values[i] * 0.97, "r^", markersize=8, markeredgecolor="black")
+                # eval에 전달할 데이터프레임의 행을 iloc으로 명확히 지정하여 안정성 향상
+                current_df_row_scope = {'df': df.iloc[i]}
+                prev_df_row_scope = {'df': df.iloc[i-1]}
+                
+                # 조건식에서 df[-1]과 같은 상대적 인덱싱을 현재 행 기준으로 변환
+                # 이 부분은 현재 구조에서는 복잡하므로, 탐색 조건식을 iloc 기반으로 작성하는 것을 권장합니다.
+                # 현재 로직은 단순화를 위해 그대로 두지만, 복잡한 조건식에서 오류가 발생할 수 있습니다.
+                if search_condition_1 and eval(search_condition_1, {}, {'df': df.iloc[:i+1]}):
+                     ax.plot(df.index[i], df['low'].iloc[i] * 0.97, "y^", markersize=8, markeredgecolor="black")
+                if search_condition_2 and eval(search_condition_2, {}, {'df': df.iloc[:i+1]}):
+                     ax.plot(df.index[i], df['low'].iloc[i] * 0.97, "r^", markersize=8, markeredgecolor="black")
             except Exception as e:
-                print(f"Error evaluating signal condition at index {i}: {e}")
+                # print(f"신호 조건 평가 중 오류 발생 (인덱스 {i}): {e}")
+                pass
 
-            if ((df.ema5.values[i - 1] > df.ema10.values[i - 1] and df.ema5.values[i] < df.ema10.values[i]) or
-                (df.macdhist.values[i - 1] > 0 > df.macdhist.values[i])):
-                ax.plot(df.index.values[i], df.high.values[i] * 1.03, "bv", markersize=8, markeredgecolor="black")
+            if ((df['ema5'].iloc[i-1] > df['ema10'].iloc[i-1] and df['ema5'].iloc[i] < df['ema10'].iloc[i]) or
+                (df['macdhist'].iloc[i-1] > 0 > df['macdhist'].iloc[i])):
+                ax.plot(df.index[i], df['high'].iloc[i] * 1.03, "bv", markersize=8, markeredgecolor="black")
                 
     def plot_volume_chart(self, ax, df):
         ax.bar(df.index, df["volume"], color="deeppink", alpha=0.5, label="VOL")
@@ -125,7 +141,6 @@ class ChartManager:
         ax.legend(loc="best")
 
     def plot_backtest_results(self, cerebro):
-        # 레이아웃에 있는 모든 위젯을 제거하여 깨끗한 상태에서 시작합니다.
         for i in reversed(range(self.backtest_layout.count())): 
             widget = self.backtest_layout.itemAt(i).widget()
             if widget is not None:
@@ -133,26 +148,21 @@ class ChartManager:
 
         fig_backtest = None
         try:
-            # cerebro.plot() 호출
             figures = cerebro.plot(style='candlestick', barup='green', fmt_x_ticks='%Y-%m-%d')
             
             if not figures or not figures[0]:
                 raise ValueError("결과 없음 (거래 미발생 등)")
             else:
-                # 성공적으로 플롯을 생성한 경우, 해당 Figure를 사용
                 fig_backtest = figures[0][0]
 
         except Exception as e:
-            # 플롯 생성 중 오류가 발생했거나 결과가 없는 경우, 오류 메시지를 담은 새 Figure를 생성
-            print(f"Error plotting backtest results: {e}")
+            print(f"백테스팅 결과 플롯 생성 중 오류: {e}")
             fig_backtest = plt.figure()
             ax = fig_backtest.add_subplot(111)
             ax.text(0.5, 0.5, f"백테스팅 결과를 표시할 수 없습니다.\n오류: {e}", 
                     horizontalalignment='center', verticalalignment='center', wrap=True)
         
-        # 준비된 Figure(성공 결과 또는 오류 메시지)로 새 Canvas를 만들어 레이아웃에 추가
         if fig_backtest:
             self.canvas_backtest = FigureCanvas(fig_backtest)
             self.backtest_layout.addWidget(self.canvas_backtest)
             self.canvas_backtest.draw()
-

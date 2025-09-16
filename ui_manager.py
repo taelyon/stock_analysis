@@ -19,16 +19,14 @@ class UIManager(QMainWindow):
         self.data_manager = DataManager()
         self.chart_manager = ChartManager(self.verticalLayout_2, self.verticalLayout_7, self.imagelabel_3)
         self.portfolio_optimizer = PortfolioOptimizer(self.textBrowser, self.verticalLayout_7)
-        # Backtester 생성 시, layout 대신 chart_manager 인스턴스를 직접 전달합니다.
         self.backtester = Backtester(self.textBrowser, self.chart_manager)
         self.config_manager = ConfigManager()
 
-        # WebEngineView 상태 관리를 위한 변수 초기화
         self.url_attempts = []
         self.current_attempt = 0
         self.error_detected = False
+        self.current_searched_stock = None
 
-        # 자바스크립트 콘솔 메시지를 감지할 수 있도록 QWebEnginePage를 설정
         self.page = QWebEnginePage()
         self.webEngineView.setPage(self.page)
         self.page.javaScriptConsoleMessage = self.handle_js_console_message
@@ -37,18 +35,16 @@ class UIManager(QMainWindow):
         self.connect_signals()
         self.initialize_ui()
 
-        # 로그 리디렉션
         self._stdout = StdoutRedirect()
         self._stdout.start()
         self._stdout.printOccur.connect(lambda x: self._append_text(x))
 
     def connect_signals(self):
-        # 버튼 연결
         self.btn_update1.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "kr"))
         self.btn_update2.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "us"))
         self.btn_update3.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "all"))
-        self.btn_stop1.clicked.connect(lambda: self.data_manager.stop_update())
-        self.btn_update4.clicked.connect(lambda: self.start_thread(self.data_manager.update_specific_stock, self.ent_stock.text()))
+        self.btn_stop1.clicked.connect(self.data_manager.stop_update)
+        self.btn_update4.clicked.connect(self.update_specific_stock)
         self.ent_stock.returnPressed.connect(self.update_specific_stock)
         self.btn_search1.clicked.connect(lambda: self.start_thread(self.search_stock, "kr"))
         self.btn_search2.clicked.connect(lambda: self.start_thread(self.search_stock, "us"))
@@ -59,7 +55,6 @@ class UIManager(QMainWindow):
         self.BacktestingButton.clicked.connect(self.run_backtesting)
         self.optimize_button.clicked.connect(self.run_portfolio_optimization)
 
-        # 설정 저장/불러오기 버튼
         self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
         self.SearchConditionInputButton_2.clicked.connect(self.load_search_condition_1)
         self.SearchConditionInputButton_3.clicked.connect(self.load_search_condition_2)
@@ -69,22 +64,27 @@ class UIManager(QMainWindow):
         self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
         self.sellConditionDefaultButton.clicked.connect(self.save_default_sell_condition)
 
-        # 리스트 위젯 아이템 클릭
         self.lb_search.itemClicked.connect(self.stock_list_item_clicked)
         self.lb_hold.itemClicked.connect(self.stock_list_item_clicked)
         self.lb_int.itemClicked.connect(self.stock_list_item_clicked)
 
-        # 보유/관심 종목 추가/삭제
         self.btn_addhold.clicked.connect(lambda: self.add_stock_to_list('hold'))
         self.btn_addint.clicked.connect(lambda: self.add_stock_to_list('interest'))
+        
+        # [MODIFIED] 삭제 버튼 기능 연결
         self.btn_del1.clicked.connect(lambda: self.remove_stock_from_list('hold'))
         self.btn_del2.clicked.connect(lambda: self.remove_stock_from_list('interest'))
 
+        # 리스트 그룹들의 '선택' 버튼 기능 연결
+        self.btn.clicked.connect(lambda: self.select_item_in_list(self.lb_search))
+        self.btn2.clicked.connect(lambda: self.select_item_in_list(self.lb_hold))
+        self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
+        self.btn_find.clicked.connect(self.find_stock)
+
     def initialize_ui(self):
         self.webEngineView.setUrl(QtCore.QUrl("https://m.stock.naver.com/"))
-        self.dateEdit_start.setDate(QtCore.QDate(2023, 1, 1))
+        self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
 
-        # 설정 파일 로드
         self.load_stock_lists()
         self.lineEditBuyCondition.setText(self.config_manager.load_condition('buy_condition.txt'))
         self.lineEditSellCondition.setText(self.config_manager.load_condition('sell_condition.txt'))
@@ -105,17 +105,19 @@ class UIManager(QMainWindow):
         self.data_manager.search_stock(nation, self.lineEditSearchCondition.text(), self.update_search_list)
 
     def stop_search(self):
-        self.data_manager.stop_search()
+        self.data_manager.run_search = False
 
     def update_search_list(self, company):
         self.lb_search.addItem(company)
 
     def find_stock(self):
         company = self.le_ent.text()
-        df = self.data_manager.get_daily_price(company, "2022-01-01")
+        df = self.data_manager.get_daily_price(company, "2024-01-01")
         if df is not None and not df.empty:
             self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
+        
         self.show_stock_info(company)
+        self.current_searched_stock = company
 
     def run_backtesting(self):
         company = self.lineEdit_stock.text()
@@ -169,10 +171,20 @@ class UIManager(QMainWindow):
         
     def stock_list_item_clicked(self, item):
         company = item.text()
-        df = self.data_manager.get_daily_price(company, "2022-01-01")
-        if df is not None and not df.empty:
-            self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
-        self.show_stock_info(company)
+        try:
+            df = self.data_manager.get_daily_price(company, "2024-01-01")
+            
+            if df is not None and not df.empty:
+                self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
+            else:
+                print(f"'{company}'의 차트 데이터를 가져올 수 없습니다.")
+                self.chart_manager.plot_stock_chart(None, company, "", "")
+
+            self.show_stock_info(company)
+            self.current_searched_stock = company
+
+        except Exception as e:
+            print(f"종목 '{company}' 클릭 처리 중 오류 발생: {e}")
 
     def show_stock_info(self, company):
         code, country = self.data_manager.get_stock_info(company)
@@ -181,33 +193,22 @@ class UIManager(QMainWindow):
             if self.url_attempts:
                 self.current_attempt = 0
                 self.error_detected = False
-                print(f"Attempting to load URL: {self.url_attempts[self.current_attempt]}")
                 self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
             else:
-                print(f"No valid URL could be generated for {company}.")
+                print(f"URL을 생성할 수 없습니다: {company}")
         else:
-            print(f"Could not get stock info for {company}.")
+            print(f"종목 정보를 가져올 수 없습니다: {company}")
 
     def handle_js_console_message(self, level, message, lineNumber, sourceID):
-        # 409 Conflict 에러를 감지하여 다음 URL을 시도하도록 플래그 설정
         if "409" in message or "Request failed with status code 409" in message:
-            print("Detected 409 Conflict, will try next URL.")
             self.error_detected = True
 
     def handle_load_finished(self, ok):
-        # 페이지 로드가 실패했거나 409 에러가 감지된 경우
         if not ok or self.error_detected:
             self.current_attempt += 1
             if self.current_attempt < len(self.url_attempts):
-                # 시도할 다음 URL이 남아있으면 로드
-                print(f"Load failed. Attempting next URL: {self.url_attempts[self.current_attempt]}")
-                self.error_detected = False  # 새 시도를 위해 플래그 초기화
+                self.error_detected = False
                 self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
-            else:
-                print(f"All URL attempts failed for the current stock.")
-        else:
-            # 페이지 로드 성공
-            print("Page loaded successfully.")
 
     def load_stock_lists(self):
         hold_stocks = self.config_manager.load_stock_list('stock_hold.txt')
@@ -216,33 +217,53 @@ class UIManager(QMainWindow):
         self.lb_int.addItems(interest_stocks)
 
     def add_stock_to_list(self, list_type):
-        selected_item = self.lb_search.currentItem()
-        if selected_item:
-            company = selected_item.text()
-            if list_type == 'hold':
-                self.lb_hold.addItem(company)
-                self.config_manager.add_stock_to_list('stock_hold.txt', company)
-            elif list_type == 'interest':
-                self.lb_int.addItem(company)
-                self.config_manager.add_stock_to_list('stock_interest.txt', company)
+        target_list = self.lb_hold if list_type == 'hold' else self.lb_int
+        filename = f'stock_{list_type}.txt'
+        
+        company_to_add = None
+        if self.lb_search.currentItem():
+            company_to_add = self.lb_search.currentItem().text()
+        elif self.current_searched_stock:
+            company_to_add = self.current_searched_stock
+
+        if company_to_add:
+            if not target_list.findItems(company_to_add, QtCore.Qt.MatchExactly):
+                target_list.addItem(company_to_add)
+                self.config_manager.add_stock_to_list(filename, company_to_add)
 
     def remove_stock_from_list(self, list_type):
+        """지정된 리스트 타입('hold', 'interest')에서 선택된 아이템을 삭제합니다."""
+        list_widget = None
+        filename = None
+
         if list_type == 'hold':
             list_widget = self.lb_hold
             filename = 'stock_hold.txt'
         elif list_type == 'interest':
             list_widget = self.lb_int
             filename = 'stock_interest.txt'
-        else:
-            return
-
-        selected_item = list_widget.currentItem()
-        if selected_item:
-            row = list_widget.row(selected_item)
-            list_widget.takeItem(row)
-            self.config_manager.remove_stock_from_list(filename, selected_item.text())
+        
+        if list_widget:
+            selected_item = list_widget.currentItem()
+            if selected_item:
+                row = list_widget.row(selected_item)
+                list_widget.takeItem(row)
+                
+                if filename:
+                    self.config_manager.remove_stock_from_list(filename, selected_item.text())
+            else:
+                list_name_map = {'hold': '보유', 'interest': '관심'}
+                print(f"{list_name_map.get(list_type, '')} 종목 목록에서 삭제할 항목을 선택해주세요.")
 
     def _append_text(self, msg):
         self.log_widget.moveCursor(QtGui.QTextCursor.End)
         self.log_widget.insertPlainText(msg)
+
+    def select_item_in_list(self, target_list_widget):
+        """주어진 리스트 위젯에서 현재 선택된 아이템에 대한 클릭 이벤트를 트리거합니다."""
+        selected_item = target_list_widget.currentItem()
+        if selected_item:
+            self.stock_list_item_clicked(selected_item)
+        else:
+            print(f"리스트에서 선택된 종목이 없습니다.")
 
