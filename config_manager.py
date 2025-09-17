@@ -62,12 +62,29 @@ class ConfigManager:
                     f.write(f"{company}\n")
 
         def remove_stock_from_list(self, filename, company_to_remove):
-            filepath = os.path.join(self.config_dir, filename)
+            
+            filepath = os.path.join(self.config_dir, filename)           
             with self.file_lock:
-                lines = self.load_stock_list(filename)
-                lines = [line for line in lines if line != company_to_remove]
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    for line in lines:
-                        f.write(f"{line}\n")
+                lines = []
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+
+                except FileNotFoundError:
+                    print(f"! 오류: 파일을 찾을 수 없습니다 - '{filepath}'")
+                    return
+
+                lines_to_keep = [
+                    line for line in lines 
+                    if line.strip() != company_to_remove.strip()
+                ]                
+
+                if len(lines) == len(lines_to_keep):
+                    print("! 경고: 파일에서 일치하는 종목을 찾지 못해 아무것도 삭제되지 않았습니다.")
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.writelines(lines_to_keep)
+                except Exception as e:
+                    print(f"! 치명적 오류: 파일 쓰기 중 예외 발생 - {e}")
     except Exception as e:
         print(f"ConfigManager initialization error: {e}")

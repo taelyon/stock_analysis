@@ -4,4 +4,3 @@ META
 GOOG
 IONQ
 Microsoft
-Edison International
