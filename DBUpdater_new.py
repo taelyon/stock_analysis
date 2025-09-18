@@ -249,6 +249,24 @@ class DBUpdater(DBManager):
             cur.execute(sql)
         conn.commit()
 
+    def update_daily_price_by_code(self, code, country):
+        """code와 country를 사용하여 특정 종목의 일별 시세를 업데이트합니다."""
+        df = None
+        if country == 'kr':
+            df = self.read_naver(code, "", pages_to_fetch=500)
+            if df is not None and not df.empty:
+                df.set_index('date', inplace=True)
+        elif country == 'us':
+            df = self.read_yfinance(code, period=2)
+            if df is not None and not df.empty:
+                df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
+
+        if df is not None and not df.empty:
+            self.replace_into_db(df, code)
+            print(f"'{code}' ({country})의 업데이트를 완료했습니다.")
+        else:
+            print(f"'{code}' ({country})의 데이터를 가져오는 데 실패했습니다.")
+
     def update_daily_price(self, nation='all', period=1):
         conn, cur = self._get_db_conn()
         if nation == 'stop':
@@ -350,4 +368,3 @@ if __name__ == '__main__':
     # dbu.init_db('comp_info') 
     # dbu.create_tables(*self._get_db_conn())
     dbu.execute_daily()
-

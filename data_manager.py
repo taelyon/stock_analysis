@@ -19,7 +19,6 @@ class DataManager:
             
             if not stock_info_df.empty:
                 # DB에 정보가 있으면 바로 반환
-                print(f"DB에서 '{company}' 정보를 찾았습니다.")
                 return stock_info_df.iloc[0]['code'], stock_info_df.iloc[0]['country']
             
             # 2. DB에 정보가 없다면 FinanceDataReader를 이용해 인터넷에서 검색합니다.
@@ -29,14 +28,22 @@ class DataManager:
                 markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX']
                 for market in markets:
                     df_stocks = fdr.StockListing(market)
+                    
+                    # KRX는 'Code', 그 외는 'Symbol' 컬럼을 사용
+                    code_col = 'Code' if market == 'KRX' else 'Symbol'
+
+                    # 해당 컬럼이 없는 경우 다음 마켓으로 건너뛰기
+                    if code_col not in df_stocks.columns or 'Name' not in df_stocks.columns:
+                        continue
+                        
                     # Symbol(티커) 또는 Name(공식 명칭)으로 검색 (대소문자 구분 없음)
                     stock = df_stocks[
-                        (df_stocks['Symbol'].str.lower() == company.lower()) | 
+                        (df_stocks[code_col].str.lower() == company.lower()) | 
                         (df_stocks['Name'].str.lower() == company.lower())
                     ]
                     
                     if not stock.empty:
-                        code = stock.iloc[0]['Symbol']
+                        code = stock.iloc[0][code_col]
                         name = stock.iloc[0]['Name']
                         country = 'us' if market != 'KRX' else 'kr'
                         
@@ -44,9 +51,10 @@ class DataManager:
                         
                         # 3. 찾은 정보를 DB에 새로 추가합니다.
                         # MarketDB 클래스에 직접 접근하여 SQL을 실행합니다.
-                        with self.market_db.conn:
-                            self.market_db.conn.execute(
-                                "INSERT OR IGNORE INTO company_info (code, company, country) VALUES (?, ?, ?)",
+                        conn, cur = self.market_db._get_db_conn()
+                        with conn:
+                            cur.execute(
+                                "INSERT OR IGNORE INTO comp_info (code, company, country) VALUES (?, ?, ?)",
                                 (code, name, country)
                             )
                         print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.")
@@ -110,7 +118,7 @@ class DataManager:
         self.run_search = True
         stock_list = self.prepare_stock_data(nation)
         
-        for company in tqdm(stock_list["company"].values, desc=f"{nation.upper()} 종목 탐색 중"):
+        for company in stock_list["company"].values:
             if not self.run_search:
                 print("탐색이 중지되었습니다.")
                 break
