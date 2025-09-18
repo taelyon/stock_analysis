@@ -75,7 +75,6 @@ class DataManager:
 
     def get_daily_price(self, company, start_date):
         """종목의 일별 시세를 조회하고 보조지표를 계산합니다."""
-        # get_stock_info가 DB에 없는 종목을 자동으로 추가하므로, 이 함수는 수정할 필요가 없습니다.
         code, country = self.get_stock_info(company)
         
         if code is None:
@@ -83,17 +82,12 @@ class DataManager:
             return None
 
         with self.db_lock:
-            # get_stock_info를 통해 DB에 종목이 보장되므로, market_db에서 조회합니다.
-            # 이 때, 사용자가 입력한 이름(company)이 아닌 DB에 저장된 공식 이름으로 조회해야 할 수 있습니다.
-            # MarketDB의 get_daily_price가 code로도 조회가 가능하다면 더 안정적입니다.
             df = self.market_db.get_daily_price(code, start_date)
 
         if df is None or df.empty:
             return None
         
         return self.calculate_indicators(df)
-
-    # --- 이하 다른 함수들은 기존 코드를 그대로 유지 ---
 
     def update_stocks(self, nation):
         """최신 10일치 시세 데이터로 업데이트합니다."""
