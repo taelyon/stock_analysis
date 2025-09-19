@@ -2,7 +2,8 @@ import pandas as pd
 import DBUpdater_new
 from threading import Lock
 from tqdm import tqdm
-import FinanceDataReader as fdr # 실시간 데이터 조회를 위해 추가
+import FinanceDataReader as fdr
+from datetime import datetime, timedelta
 
 class DataManager:
     def __init__(self):
@@ -14,29 +15,19 @@ class DataManager:
     def get_stock_info(self, company):
         """DB에서 종목 정보를 조회하고, 없으면 인터넷에서 검색하여 새로 추가합니다."""
         with self.db_lock:
-            # 1. 먼저 로컬 DB에서 기존 방식으로 정보를 조회합니다.
             stock_info_df = self.market_db.get_comp_info(company)
-            
             if not stock_info_df.empty:
-                # DB에 정보가 있으면 바로 반환
                 return stock_info_df.iloc[0]['code'], stock_info_df.iloc[0]['country']
             
-            # 2. DB에 정보가 없다면 FinanceDataReader를 이용해 인터넷에서 검색합니다.
             print(f"DB에 '{company}' 정보가 없어 인터넷에서 검색합니다.")
             try:
-                # 미국(NASDAQ, NYSE, AMEX)과 한국(KRX) 시장에서 종목을 찾습니다.
                 markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX']
                 for market in markets:
                     df_stocks = fdr.StockListing(market)
-                    
-                    # KRX는 'Code', 그 외는 'Symbol' 컬럼을 사용
                     code_col = 'Code' if market == 'KRX' else 'Symbol'
-
-                    # 해당 컬럼이 없는 경우 다음 마켓으로 건너뛰기
                     if code_col not in df_stocks.columns or 'Name' not in df_stocks.columns:
                         continue
-                        
-                    # Symbol(티커) 또는 Name(공식 명칭)으로 검색 (대소문자 구분 없음)
+                    
                     stock = df_stocks[
                         (df_stocks[code_col].str.lower() == company.lower()) | 
                         (df_stocks['Name'].str.lower() == company.lower())
@@ -49,8 +40,6 @@ class DataManager:
                         
                         print(f"인터넷에서 종목을 찾았습니다: 코드='{code}', 이름='{name}', 국가='{country}'")
                         
-                        # 3. 찾은 정보를 DB에 새로 추가합니다.
-                        # MarketDB 클래스에 직접 접근하여 SQL을 실행합니다.
                         conn, cur = self.market_db._get_db_conn()
                         with conn:
                             cur.execute(
@@ -59,28 +48,62 @@ class DataManager:
                             )
                         print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.")
                         
-                        # DB에 추가했으므로 해당 종목의 일별 시세도 업데이트합니다.
-                        self.db_updater.update_daily_price_by_code(code, country)
-                        
+                        self.db_updater.update_single_stock_all_data(name)
                         return code, country
                 
-                # 4. 모든 시장을 검색해도 종목을 찾지 못한 경우
                 print(f"'{company}'에 대한 종목 정보를 인터넷에서도 찾을 수 없습니다.")
                 return None, None
-
             except Exception as e:
                 print(f"인터넷에서 종목 정보 조회 중 오류 발생: {e}")
                 return None, None
 
+    def update_recent_stock_data(self, code):
+        """특정 종목의 최신 시세 데이터를 DB에 덮어쓰기하여 업데이트합니다."""
+        try:
+            start_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')           
+            df_new = fdr.DataReader(code, start_date)
 
-    def get_daily_price(self, company, start_date):
-        """종목의 일별 시세를 조회하고 보조지표를 계산합니다."""
+            if df_new.empty:
+                print(f"'{code}'에 대한 새로운 시세 데이터가 없습니다.")
+                return
+
+            conn, cur = self.market_db._get_db_conn()
+            with conn:
+                for index, row in df_new.iterrows():
+                    date_str = index.strftime('%Y-%m-%d')
+                    cur.execute(
+                        """
+                        REPLACE INTO daily_price (code, date, open, high, low, close, volume)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (code, date_str, row['Open'], row['High'], row['Low'], row['Close'], row['Volume'])
+                    )
+        except Exception as e:
+            print(f"'{code}'의 최신 시세 업데이트 중 오류 발생: {e}")
+
+    def get_daily_price(self, company, start_date=None):
+        """
+        종목의 일별 시세를 조회하고 보조지표를 계산합니다.
+        start_date가 없으면 차트용(최신 업데이트 + 3개월 조회), 있으면 해당 날짜부터 조회합니다.
+        """
         code, country = self.get_stock_info(company)
-        
         if code is None:
-            # get_stock_info에서 최종적으로 종목을 찾지 못한 경우
             return None
 
+        # 차트 조회를 위한 로직
+        if start_date is None:
+            self.update_recent_stock_data(code)
+            fetch_start_date = (datetime.now() - timedelta(days=220)).strftime('%Y-%m-%d')
+            with self.db_lock:
+                df = self.market_db.get_daily_price(code, fetch_start_date)
+            
+            if df is None or df.empty:
+                return None
+            
+            calculated_df = self.calculate_indicators(df)
+            return calculated_df.tail(90)
+
+        # 백테스팅 등 특정 기간 조회를 위한 기존 로직
         with self.db_lock:
             df = self.market_db.get_daily_price(code, start_date)
 
@@ -172,7 +195,8 @@ class DataManager:
         df['fast_k'] = (df.close - ndays_low) / (ndays_high - ndays_low) * 100
         df['slow_d'] = df['fast_k'].rolling(window=3).mean()
 
-        df = df.dropna()
+        # [MODIFIED] 캔들 차트 필수 데이터가 없을 때만 행을 삭제하도록 변경
+        df.dropna(subset=['open', 'high', 'low', 'close'], inplace=True)
         return df
 
     def get_stock_urls(self, code, country):

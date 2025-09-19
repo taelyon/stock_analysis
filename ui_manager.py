@@ -1,5 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMainWindow, QProgressBar
 from PyQt5.QtWebEngineWidgets import QWebEnginePage
 from data_manager import DataManager
 from chart_manager import ChartManager
@@ -23,6 +23,14 @@ class UIManager(QMainWindow):
             self.backtester = Backtester(self.textBrowser, self.chart_manager)
             self.config_manager = ConfigManager()
 
+            # --- 진행바(ProgressBar) 추가 ---
+            self.progressBar = QProgressBar(self)
+            # 'verticalLayout'은 UI 파일에서 DB 업데이트 버튼들이 포함된 세로 레이아웃의 이름입니다.
+            # UI 파일의 레이아웃 이름에 맞게 수정해야 할 수 있습니다.
+            self.verticalLayout.addWidget(self.progressBar)
+            self.progressBar.hide() # 평소에는 숨겨둡니다.
+            # --------------------------------
+
             self.url_attempts = []
             self.current_attempt = 0
             self.error_detected = False
@@ -41,9 +49,13 @@ class UIManager(QMainWindow):
             self._stdout.printOccur.connect(lambda x: self._append_text(x))
 
         def connect_signals(self):
-            self.btn_update1.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "kr"))
-            self.btn_update2.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "us"))
-            self.btn_update3.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "all"))
+            # --- 진행바 연결 ---
+            self.btn_update1.clicked.connect(lambda: self.start_db_update("kr"))
+            self.btn_update2.clicked.connect(lambda: self.start_db_update("us"))
+            self.btn_update3.clicked.connect(lambda: self.start_db_update("all"))
+            self.data_manager.db_updater.progress.connect(self.update_progress)
+            # --------------------
+
             self.btn_stop1.clicked.connect(self.data_manager.stop_update)
             self.btn_update4.clicked.connect(self.update_specific_stock)
             self.ent_stock.returnPressed.connect(self.update_specific_stock)
@@ -76,11 +88,9 @@ class UIManager(QMainWindow):
             self.btn_addint1.clicked.connect(lambda: self.add_stock_to_list('interest'))
             self.btn_addint2.clicked.connect(lambda: self.add_stock_to_list('interest'))
 
-            # [MODIFIED] 삭제 버튼 기능 연결
             self.btn_del1.clicked.connect(lambda: self.remove_stock_from_list('hold'))
             self.btn_del2.clicked.connect(lambda: self.remove_stock_from_list('interest'))
 
-            # 리스트 그룹들의 '선택' 버튼 기능 연결
             self.btn.clicked.connect(lambda: self.select_item_in_list(self.lb_search))
             self.btn2.clicked.connect(lambda: self.select_item_in_list(self.lb_hold))
             self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
@@ -101,6 +111,25 @@ class UIManager(QMainWindow):
 
         def start_thread(self, func, *args):
             Thread(target=func, args=args, daemon=True).start()
+        
+        # --- 진행바 관련 함수 추가 ---
+        def start_db_update(self, nation):
+            """DB 업데이트 시작 시 프로그레스바를 초기화하고 보여줍니다."""
+            self.progressBar.setValue(0)
+            self.progressBar.show()
+            self.start_thread(self.data_manager.update_stocks, nation)
+
+        @QtCore.pyqtSlot(int, int)
+        def update_progress(self, current, total):
+            """프로그레스바의 값을 업데이트하고, 완료되면 숨깁니다."""
+            if total > 0:
+                self.progressBar.setMaximum(total)
+                self.progressBar.setValue(current)
+            
+            if current >= total:
+                # 완료 후 1초 뒤에 프로그레스바를 숨깁니다.
+                QtCore.QTimer.singleShot(1000, self.progressBar.hide)
+        # ----------------------------
 
         def update_specific_stock(self):
             self.start_thread(self.data_manager.update_specific_stock, self.ent_stock.text())
@@ -118,17 +147,15 @@ class UIManager(QMainWindow):
         def find_stock(self):
             company = self.le_ent.text()
             
-            # 입력값이 비어있는지 확인
             if not company.strip():
                 print("조회할 종목명을 입력해주세요.")
                 return
 
-            df = self.data_manager.get_daily_price(company, "2024-01-01")
+            df = self.data_manager.get_daily_price(company)
             
             if df is not None and not df.empty:
                 self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
             
-            # show_stock_info는 DB에 종목이 성공적으로 추가된 후에만 호출되도록 df 조회 이후로 순서를 유지
             self.show_stock_info(company)
             self.current_searched_stock = company
 
@@ -183,19 +210,14 @@ class UIManager(QMainWindow):
             print("기본 매도 조건 저장 완료")
             
         def stock_list_item_clicked(self, item):
-            # 1. 클릭된 항목이 속한 리스트(source_list)를 확인합니다.
             source_list = item.listWidget()
-
-            # 2. 프로그램에 있는 모든 리스트(lb_search, lb_hold, lb_int)를 확인하면서
-            #    방금 클릭한 source_list가 아닌 다른 리스트들의 선택을 해제합니다.
             for list_widget in [self.lb_search, self.lb_hold, self.lb_int]:
                 if list_widget is not source_list:
                     list_widget.clearSelection()
 
-            # 3. 원래 함수가 하던 작업을 그대로 수행합니다.
             company = item.text()
             try:
-                df = self.data_manager.get_daily_price(company, "2024-01-01")
+                df = self.data_manager.get_daily_price(company)
                 
                 if df is not None and not df.empty:
                     self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
@@ -240,60 +262,38 @@ class UIManager(QMainWindow):
             self.lb_int.addItems(interest_stocks)
 
         def add_stock_to_list(self, list_type):
-            print(f"\n[버튼 클릭] '{list_type}' 목록 추가 버튼이 눌렸습니다.")
-            
-            # 버튼을 누르는 시점의 'current_searched_stock' 변수 값을 확인합니다.
-            print(f"==> [상태 확인] 현재 'current_searched_stock' 변수의 값: '{self.current_searched_stock}'")
-
             target_list = self.lb_hold if list_type == 'hold' else self.lb_int
             filename = f'stock_{list_type}.txt'
-            
             company_to_add = self.current_searched_stock
 
             if company_to_add:
                 if not target_list.findItems(company_to_add, QtCore.Qt.MatchExactly):
                     target_list.addItem(company_to_add)
                     self.config_manager.add_stock_to_list(filename, company_to_add)
-                    print(f"==> [작업 완료] '{company_to_add}'을(를) 목록에 성공적으로 추가했습니다.")
                 else:
-                    print(f"==> [작업 중단] '{company_to_add}'은(는) 이미 목록에 존재합니다.")
+                    print(f"'{company_to_add}'은(는) 이미 목록에 존재합니다.")
             else:
-                print("==> [작업 중단] 추가할 종목에 대한 정보가 없습니다. 먼저 종목을 클릭해주세요.")
+                print("추가할 종목을 먼저 선택해주세요.")
 
         def remove_stock_from_list(self, list_type):
-            """지정된 리스트에서 선택된 아이템을 삭제하고, 과정을 로그로 출력합니다."""
-            list_widget = None
-            filename = None
+            list_widget = self.lb_hold if list_type == 'hold' else self.lb_int
+            filename = f'stock_{list_type}.txt'
 
-            if list_type == 'hold':
-                list_widget = self.lb_hold
-                filename = 'stock_hold.txt'
-            elif list_type == 'interest':
-                list_widget = self.lb_int
-                filename = 'stock_interest.txt'
-            
-            if list_widget:
-                selected_item = list_widget.currentItem()
-                if selected_item:
-                    item_text = selected_item.text()
-                    
-                    row = list_widget.row(selected_item)
-                    list_widget.takeItem(row)
-                    
-                    if filename:
-                        self.config_manager.remove_stock_from_list(filename, item_text)
-                    else:
-                        print("! 오류: 파일명이 지정되지 않았습니다.")
-                else:
-                    list_name_map = {'hold': '보유', 'interest': '관심'}
-                    print(f"! 경고: {list_name_map.get(list_type, '')} 목록에서 삭제할 항목이 선택되지 않았습니다.")
+            selected_item = list_widget.currentItem()
+            if selected_item:
+                item_text = selected_item.text()
+                row = list_widget.row(selected_item)
+                list_widget.takeItem(row)
+                self.config_manager.remove_stock_from_list(filename, item_text)
+            else:
+                list_name_map = {'hold': '보유', 'interest': '관심'}
+                print(f"{list_name_map.get(list_type, '')} 목록에서 삭제할 항목을 선택해주세요.")
 
         def _append_text(self, msg):
             self.log_widget.moveCursor(QtGui.QTextCursor.End)
             self.log_widget.insertPlainText(msg)
 
         def select_item_in_list(self, target_list_widget):
-            """주어진 리스트 위젯에서 현재 선택된 아이템에 대한 클릭 이벤트를 트리거합니다."""
             selected_item = target_list_widget.currentItem()
             if selected_item:
                 self.stock_list_item_clicked(selected_item)
@@ -302,4 +302,3 @@ class UIManager(QMainWindow):
     except Exception as e:
         print(f"UIManager 초기화 중 오류 발생: {e}")
         raise
-
