@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import yfinance as yf
-from tqdm import tqdm
+# from tqdm import tqdm # tqdm 라이브러리를 더 이상 사용하지 않으므로 삭제합니다.
 import exchange_calendars as xcals
 import warnings
 import threading
@@ -95,7 +95,7 @@ class DBUpdater(DBManager):
         krx_list['updated_date'] = today
 
         for r in krx_list.itertuples():
-            sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', \"{r.company.replace('"', '""')}\", '{r.market}', '{r.country}', '{r.updated_date}')"
+            sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', \"{r.company.replace('\"', '\"\"')}\", '{r.market}', '{r.country}', '{r.updated_date}')"
             cur.execute(sql)
         conn.commit()
         
@@ -166,7 +166,6 @@ class DBUpdater(DBManager):
         df = df.rename(columns={'날짜': 'date', '종가': 'close', '전일비': 'diff',
                                 '시가': 'open', '고가': 'high', '저가': 'low', '거래량': 'volume'})
         
-        # [FIX] 데이터 클리닝 및 타입 변환 로직 (float 경유)
         is_negative = df['diff'].astype(str).str.contains('하락')
         df['diff'] = df['diff'].astype(str).str.replace(r'[^0-9]', '', regex=True)
         df['diff'] = pd.to_numeric(df['diff'], errors='coerce').fillna(0).astype(int)
@@ -275,23 +274,36 @@ class DBUpdater(DBManager):
         self.run_update = True
         
         if nation in ['kr', 'all']:
+            print("KR 주식 업데이트를 시작합니다.")
             cur.execute("SELECT code, company FROM comp_info WHERE country = 'kr'")
-            for code, company in tqdm(cur.fetchall(), desc="KR 주식 업데이트 중"):
-                if not self.run_update: break
+            kr_stocks = cur.fetchall()
+            for i, (code, company) in enumerate(kr_stocks):
+                if not self.run_update: 
+                    break
                 df = self.read_naver(code, company, 1 if period == 1 else 500)
                 if df is not None and not df.empty:
                     df.set_index('date', inplace=True)
                     self.replace_into_db(df, code)
+                    print(f"({i+1}/{len(kr_stocks)}) [{code}] {company} 업데이트 완료.")
+                else:
+                    print(f"({i+1}/{len(kr_stocks)}) [{code}] {company} 업데이트 실패 (데이터 없음).")
 
         if nation in ['us', 'all']:
+            print("\nUS 주식 업데이트를 시작합니다.")
             cur.execute("SELECT code, company FROM comp_info WHERE country = 'us'")
-            for code, company in tqdm(cur.fetchall(), desc="US 주식 업데이트 중"):
-                if not self.run_update: break
+            us_stocks = cur.fetchall()
+            for i, (code, company) in enumerate(us_stocks):
+                if not self.run_update: 
+                    break
                 df = self.read_yfinance(code, period)
                 if df is not None and not df.empty:
                     df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
                     self.replace_into_db(df, code)
-        print("일별 시세 업데이트 완료.")
+                    print(f"({i+1}/{len(us_stocks)}) [{code}] {company} 업데이트 완료.")
+                else:
+                    print(f"({i+1}/{len(us_stocks)}) [{code}] {company} 업데이트 실패 (데이터 없음).")
+        
+        print("\n모든 일별 시세 업데이트가 완료되었습니다.")
     
     def update_single_stock_all_data(self, company):
         mdb = MarketDB()
@@ -347,7 +359,6 @@ class MarketDB(DBManager):
             
         code = comp_info.iloc[0]['code']
         name = comp_info.iloc[0]['company']
-        print(f"일별 시세 조회 중: {name} ({code})")
         
         conn, cur = self._get_db_conn()
         
@@ -365,6 +376,4 @@ class MarketDB(DBManager):
 
 if __name__ == '__main__':
     dbu = DBUpdater()
-    # dbu.init_db('comp_info') 
-    # dbu.create_tables(*self._get_db_conn())
     dbu.execute_daily()
