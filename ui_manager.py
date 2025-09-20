@@ -27,6 +27,8 @@ class UIManager(QMainWindow):
             self.current_attempt = 0
             self.error_detected = False
             self.current_searched_stock = None
+            self.render_failure_count = 0
+            self.desktop_fallback_url = QtCore.QUrl("https://finance.naver.com/")
 
             self.page = QWebEnginePage()
             self.webEngineView.setPage(self.page)
@@ -90,9 +92,6 @@ class UIManager(QMainWindow):
         def initialize_ui(self):
             # QWebEngineProfile 설정
             profile = QWebEngineProfile("myProfile", self)  # Create a new profile
-            profile.setHttpUserAgent(
-                "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Mobile Safari/537.36"
-            )
 
             # 기존 QWebEnginePage를 새로운 profile로 교체
             self.page = QWebEnginePage(profile, self.webEngineView)
@@ -107,7 +106,7 @@ class UIManager(QMainWindow):
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)  # Optional, as needed
 
-            self.webEngineView.setUrl(QtCore.QUrl("https://m.stock.naver.com/"))
+            self.webEngineView.setUrl(self.desktop_fallback_url)
             self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
 
             self.load_stock_lists()
@@ -121,8 +120,15 @@ class UIManager(QMainWindow):
 
         def handle_render_process_terminated(self, process, status):
             """웹페이지 렌더링 프로세스가 다운되면 자동으로 페이지를 다시 로드하는 함수입니다."""
-            print("WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 페이지를 새로고침합니다.")
-            self.webEngineView.reload()
+            self.render_failure_count += 1
+            print(
+                f"WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 안정적인 페이지로 전환합니다. (재시도 {self.render_failure_count})"
+            )
+
+            if self.render_failure_count <= 3:
+                self.webEngineView.setUrl(self.desktop_fallback_url)
+            else:
+                print("반복적인 크래시가 감지되어 추가 재시도를 중단합니다.")
 
         def start_thread(self, func, *args):
             Thread(target=func, args=args, daemon=True).start()
@@ -255,11 +261,12 @@ class UIManager(QMainWindow):
                     self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
                 else:
                     print("모든 URL 시도 실패, 데스크톱 버전으로 대체")
-                    self.webEngineView.setUrl(QtCore.QUrl("https://finance.naver.com/"))
+                    self.webEngineView.setUrl(self.desktop_fallback_url)
                     self.current_attempt = 0 # 데스크톱 버전 로드 후 시도 횟수 초기화
                 return
 
             # 페이지 로드가 성공적으로 완료된 후, 5초 뒤에 JS를 실행하여 '로딩중' 요소가 있는지 확인
+            self.render_failure_count = 0
             QtCore.QTimer.singleShot(5000, lambda: self.page.runJavaScript("""
                 (function() {
                     // '로딩중' 텍스트를 포함하는 모든 요소를 찾습니다.
