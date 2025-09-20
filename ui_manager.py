@@ -84,16 +84,14 @@ class UIManager(QMainWindow):
             self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
             self.btn_find.clicked.connect(self.find_stock)
 
-            # --- 추가된 코드 ---
             # 웹페이지 렌더링 프로세스가 비정상 종료되었을 때의 시그널을 연결합니다.
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
-            # --- 추가된 코드 ---
 
         def initialize_ui(self):
             # QWebEngineProfile 설정
             profile = QWebEngineProfile("myProfile", self)  # Create a new profile
             profile.setHttpUserAgent(
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+                "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Mobile Safari/537.36"
             )
 
             # 기존 QWebEnginePage를 새로운 profile로 교체
@@ -258,37 +256,32 @@ class UIManager(QMainWindow):
                 else:
                     print("모든 URL 시도 실패, 데스크톱 버전으로 대체")
                     self.webEngineView.setUrl(QtCore.QUrl("https://finance.naver.com/"))
-                    self.current_attempt = 0
+                    self.current_attempt = 0 # 데스크톱 버전 로드 후 시도 횟수 초기화
                 return
 
-            # 5초 후 로딩 상태 확인
+            # 페이지 로드가 성공적으로 완료된 후, 5초 뒤에 JS를 실행하여 '로딩중' 요소가 있는지 확인
             QtCore.QTimer.singleShot(5000, lambda: self.page.runJavaScript("""
                 (function() {
-                    // '로딩중' 텍스트가 포함된 요소를 찾기 위해 순수 JavaScript 사용
-                    const elements = document.getElementsByTagName('*');
-                    let loadingFound = false;
-                    for (let i = 0; i < elements.length; i++) {
-                        if (elements[i].textContent.includes('로딩중')) {
-                            loadingFound = true;
-                            break;
-                        }
-                    }
-                    return loadingFound ? 'loading' : 'complete';
+                    // '로딩중' 텍스트를 포함하는 모든 요소를 찾습니다.
+                    const elements = document.body.innerText;
+                    return elements.includes('로딩중') ? 'loading' : 'complete';
                 })();
             """, self.on_js_complete))
 
         def on_js_complete(self, result):
             print(f"JS 실행 결과: {result}")
-            if result == 'loading' and self.current_attempt < 3:  # 재시도 제한 추가
+            # 'loading' 상태이고, 재시도 횟수가 3회 미만일 경우
+            if result == 'loading' and self.current_attempt < 3:
                 self.current_attempt += 1
                 print(f"부분 로드 감지, 재시도 {self.current_attempt}/3")
-                self.webEngineView.reload()
+                self.webEngineView.reload() # 페이지 새로고침
+            # 'complete' 상태이거나 재시도 횟수를 초과한 경우
             elif result == 'complete':
                 print("페이지 로드 완료")
-                self.current_attempt = 0  # 성공 시 재시도 카운터 초기화
-            else:
-                print("예기치 않은 JS 결과, 재시도 중단")
-                self.current_attempt = 0
+                self.current_attempt = 0  # 성공했으므로 재시도 카운터를 초기화합니다.
+            else: # 'loading' 이지만 재시도 횟수를 초과했거나, 예기치 않은 결과일 경우
+                print("재시도를 중단합니다.")
+                self.current_attempt = 0 # 더 이상 시도하지 않도록 카운터 초기화
 
         def load_stock_lists(self):
             hold_stocks = self.config_manager.load_stock_list('stock_hold.txt')
