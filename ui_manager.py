@@ -28,8 +28,9 @@ class UIManager(QMainWindow):
             self.error_detected = False
             self.current_searched_stock = None
             self.render_failure_count = 0
-            self.desktop_fallback_url = QtCore.QUrl("https://finance.naver.com/")
-
+            self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
+            self.mobile_profile = None
+            self.max_render_failures = 3
             self.page = QWebEnginePage()
             self.webEngineView.setPage(self.page)
             self.page.javaScriptConsoleMessage = self.handle_js_console_message
@@ -90,14 +91,8 @@ class UIManager(QMainWindow):
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
-            # QWebEngineProfile 설정
-            profile = QWebEngineProfile("myProfile", self)  # Create a new profile
-
-            # 기존 QWebEnginePage를 새로운 profile로 교체
-            self.page = QWebEnginePage(profile, self.webEngineView)
-            self.webEngineView.setPage(self.page)
-            self.page.javaScriptConsoleMessage = self.handle_js_console_message
-            self.webEngineView.loadFinished.connect(self.handle_load_finished)
+            # QWebEngineProfile 설정 및 모바일 페이지 최적화
+            self._reset_mobile_profile(rebuild=True)
 
             # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
@@ -106,7 +101,7 @@ class UIManager(QMainWindow):
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)  # Optional, as needed
 
-            self.webEngineView.setUrl(self.desktop_fallback_url)
+            self.webEngineView.setUrl(self.mobile_home_url)
             self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
 
             self.load_stock_lists()
@@ -118,15 +113,64 @@ class UIManager(QMainWindow):
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
 
+        def _create_mobile_profile(self):
+            """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
+            profile = QWebEngineProfile(self)
+            profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
+            profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
+            profile.setHttpAcceptLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
+
+            user_agent = profile.httpUserAgent()
+            if "Mobile" not in user_agent:
+                profile.setHttpUserAgent(
+                    "Mozilla/5.0 (Linux; Android 13; SM-S918N) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36"
+                )
+
+            return profile
+
+        def _apply_profile_to_view(self, profile):
+            """새로운 프로필을 웹뷰에 적용하고 관련 핸들러를 재연결합니다."""
+            if hasattr(self, "page") and self.page is not None:
+                try:
+                    self.page.deleteLater()
+                except RuntimeError:
+                    pass
+
+            self.page = QWebEnginePage(profile, self.webEngineView)
+            self.webEngineView.setPage(self.page)
+            self.page.javaScriptConsoleMessage = self.handle_js_console_message
+
+        def _reset_mobile_profile(self, rebuild=False):
+            """모바일 페이지용 프로필을 초기화하거나 캐시를 정리합니다."""
+            if rebuild or self.mobile_profile is None:
+                if getattr(self, "mobile_profile", None) is not None:
+                    try:
+                        self.mobile_profile.deleteLater()
+                    except RuntimeError:
+                        pass
+                self.mobile_profile = self._create_mobile_profile()
+            else:
+                self.mobile_profile.clearHttpCache()
+                cookie_store = self.mobile_profile.cookieStore()
+                if cookie_store is not None:
+                    cookie_store.deleteAllCookies()
+
+            self._apply_profile_to_view(self.mobile_profile)
+
         def handle_render_process_terminated(self, process, status):
             """웹페이지 렌더링 프로세스가 다운되면 자동으로 페이지를 다시 로드하는 함수입니다."""
             self.render_failure_count += 1
             print(
-                f"WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 안정적인 페이지로 전환합니다. (재시도 {self.render_failure_count})"
+                f"WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 모바일 페이지를 다시 불러옵니다. "
+                f"(재시도 {self.render_failure_count}/{self.max_render_failures})"
             )
 
-            if self.render_failure_count <= 3:
-                self.webEngineView.setUrl(self.desktop_fallback_url)
+            if self.render_failure_count <= self.max_render_failures:
+                self._reset_mobile_profile(rebuild=True)
+                self.current_attempt = 0
+                self.error_detected = False
+                self.webEngineView.setUrl(self.mobile_home_url)
             else:
                 print("반복적인 크래시가 감지되어 추가 재시도를 중단합니다.")
 
@@ -260,9 +304,11 @@ class UIManager(QMainWindow):
                     print(f"페이지 로드 실패, 재시도 {self.current_attempt}/{len(self.url_attempts)}")
                     self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
                 else:
-                    print("모든 URL 시도 실패, 데스크톱 버전으로 대체")
-                    self.webEngineView.setUrl(self.desktop_fallback_url)
-                    self.current_attempt = 0 # 데스크톱 버전 로드 후 시도 횟수 초기화
+                    print("모든 URL 시도 실패, 모바일 홈으로 대체")
+                    self._reset_mobile_profile(rebuild=True)
+                    self.error_detected = False
+                    self.webEngineView.setUrl(self.mobile_home_url)
+                    self.current_attempt = 0 # 모바일 홈 로드 후 시도 횟수 초기화
                 return
 
             # 페이지 로드가 성공적으로 완료된 후, 5초 뒤에 JS를 실행하여 '로딩중' 요소가 있는지 확인
