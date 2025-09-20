@@ -339,7 +339,7 @@ class DBUpdater(DBManager):
 
     def execute_daily(self):
         self.update_comp_info('all')
-        self.update_daily_price('all', 1)
+        self.update_daily_price('all', 2)
         self.close_db_conn()
 
 class MarketDB(DBManager):
