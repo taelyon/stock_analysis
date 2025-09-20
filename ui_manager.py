@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
+from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings
 from data_manager import DataManager
 from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
@@ -29,7 +29,6 @@ class UIManager(QMainWindow):
             self.current_searched_stock = None
             self.render_failure_count = 0
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
-            self.mobile_profile = None
             self.max_render_failures = 3
             self.page = QWebEnginePage()
             self.webEngineView.setPage(self.page)
@@ -91,9 +90,6 @@ class UIManager(QMainWindow):
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
-            # QWebEngineProfile 설정 및 모바일 페이지 최적화
-            self._reset_mobile_profile(rebuild=True)
-
             # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
             settings.setAttribute(QWebEngineSettings.PluginsEnabled, False)
@@ -162,17 +158,17 @@ class UIManager(QMainWindow):
             """웹페이지 렌더링 프로세스가 다운되면 자동으로 페이지를 다시 로드하는 함수입니다."""
             self.render_failure_count += 1
             print(
-                f"WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 모바일 페이지를 다시 불러옵니다. "
+                f"WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 페이지를 다시 불러옵니다. "
                 f"(재시도 {self.render_failure_count}/{self.max_render_failures})"
             )
 
-            if self.render_failure_count <= self.max_render_failures:
-                self._reset_mobile_profile(rebuild=True)
+            if self.render_failure_count < self.max_render_failures:
+                self.webEngineView.reload()
+            else:
+                print("반복적인 크래시가 감지되어 모바일 기본 페이지로 전환합니다.")
                 self.current_attempt = 0
                 self.error_detected = False
                 self.webEngineView.setUrl(self.mobile_home_url)
-            else:
-                print("반복적인 크래시가 감지되어 추가 재시도를 중단합니다.")
 
         def start_thread(self, func, *args):
             Thread(target=func, args=args, daemon=True).start()
@@ -293,7 +289,8 @@ class UIManager(QMainWindow):
 
         def handle_js_console_message(self, level, message, lineNumber, sourceID):
             print(f"JS Console: {level} - {message} at line {lineNumber}")
-            if "409" in message or "CORS" in message or "NetworkError" in message:
+            network_error_signals = ["CORS", "NetworkError", "net::ERR", "Failed to load resource"]
+            if any(keyword in message for keyword in network_error_signals):
                 self.error_detected = True
 
         def handle_load_finished(self, ok):
@@ -304,11 +301,10 @@ class UIManager(QMainWindow):
                     print(f"페이지 로드 실패, 재시도 {self.current_attempt}/{len(self.url_attempts)}")
                     self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
                 else:
-                    print("모든 URL 시도 실패, 모바일 홈으로 대체")
-                    self._reset_mobile_profile(rebuild=True)
+                    print("모든 URL 시도 실패, 기본 페이지로 대체")
                     self.error_detected = False
                     self.webEngineView.setUrl(self.mobile_home_url)
-                    self.current_attempt = 0 # 모바일 홈 로드 후 시도 횟수 초기화
+                    self.current_attempt = 0 # 기본 페이지 로드 후 시도 횟수 초기화
                 return
 
             # 페이지 로드가 성공적으로 완료된 후, 5초 뒤에 JS를 실행하여 '로딩중' 요소가 있는지 확인
