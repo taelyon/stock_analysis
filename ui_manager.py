@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWebEngineWidgets import QWebEnginePage
+from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from data_manager import DataManager
 from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
@@ -16,7 +16,7 @@ class UIManager(QMainWindow):
         def __init__(self):
             super().__init__()
             uic.loadUi('stock_analysis.ui', self)
-            
+
             self.data_manager = DataManager()
             self.chart_manager = ChartManager(self.verticalLayout_2, self.verticalLayout_7, self.imagelabel_3)
             self.portfolio_optimizer = PortfolioOptimizer(self.textBrowser, self.verticalLayout_7)
@@ -32,7 +32,7 @@ class UIManager(QMainWindow):
             self.webEngineView.setPage(self.page)
             self.page.javaScriptConsoleMessage = self.handle_js_console_message
             self.webEngineView.loadFinished.connect(self.handle_load_finished)
-            
+
             self.connect_signals()
             self.initialize_ui()
 
@@ -84,7 +84,31 @@ class UIManager(QMainWindow):
             self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
             self.btn_find.clicked.connect(self.find_stock)
 
+            # --- 추가된 코드 ---
+            # 웹페이지 렌더링 프로세스가 비정상 종료되었을 때의 시그널을 연결합니다.
+            self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
+            # --- 추가된 코드 ---
+
         def initialize_ui(self):
+            # QWebEngineProfile 설정
+            profile = QWebEngineProfile("myProfile", self)  # Create a new profile
+            profile.setHttpUserAgent(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+            )
+
+            # 기존 QWebEnginePage를 새로운 profile로 교체
+            self.page = QWebEnginePage(profile, self.webEngineView)
+            self.webEngineView.setPage(self.page)
+            self.page.javaScriptConsoleMessage = self.handle_js_console_message
+            self.webEngineView.loadFinished.connect(self.handle_load_finished)
+
+            # QWebEngineView 리소스 최적화 설정
+            settings = self.webEngineView.settings()
+            settings.setAttribute(QWebEngineSettings.PluginsEnabled, False)
+            settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
+            settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)  # Optional, as needed
+
             self.webEngineView.setUrl(QtCore.QUrl("https://m.stock.naver.com/"))
             self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
 
@@ -96,6 +120,11 @@ class UIManager(QMainWindow):
             self.search_condition_text_1 = search_cond1
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
+
+        def handle_render_process_terminated(self, process, status):
+            """웹페이지 렌더링 프로세스가 다운되면 자동으로 페이지를 다시 로드하는 함수입니다."""
+            print("WebEngine 렌더링 프로세스가 예기치 않게 종료되었습니다. 페이지를 새로고침합니다.")
+            self.webEngineView.reload()
 
         def start_thread(self, func, *args):
             Thread(target=func, args=args, daemon=True).start()
@@ -115,16 +144,16 @@ class UIManager(QMainWindow):
 
         def find_stock(self):
             company = self.le_ent.text()
-            
+
             if not company.strip():
                 print("조회할 종목명을 입력해주세요.")
                 return
 
             df = self.data_manager.get_daily_price(company)
-            
+
             if df is not None and not df.empty:
                 self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
-            
+
             self.show_stock_info(company)
             self.current_searched_stock = company
 
@@ -177,7 +206,7 @@ class UIManager(QMainWindow):
         def save_default_sell_condition(self):
             self.lineEditSellCondition.setText(self.config_manager.save_default_sell_condition())
             print("기본 매도 조건 저장 완료")
-            
+
         def stock_list_item_clicked(self, item):
             source_list = item.listWidget()
 
@@ -188,7 +217,7 @@ class UIManager(QMainWindow):
             company = item.text()
             try:
                 df = self.data_manager.get_daily_price(company)
-                
+
                 if df is not None and not df.empty:
                     self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
                 else:
@@ -215,7 +244,8 @@ class UIManager(QMainWindow):
                 print(f"종목 정보를 가져올 수 없습니다: {company}")
 
         def handle_js_console_message(self, level, message, lineNumber, sourceID):
-            if "409" in message or "Request failed with status code 409" in message:
+            print(f"JS Console: {level} - {message} at line {lineNumber}")
+            if "409" in message or "CORS" in message or "NetworkError" in message:
                 self.error_detected = True
 
         def handle_load_finished(self, ok):
@@ -223,7 +253,42 @@ class UIManager(QMainWindow):
                 self.current_attempt += 1
                 if self.current_attempt < len(self.url_attempts):
                     self.error_detected = False
+                    print(f"페이지 로드 실패, 재시도 {self.current_attempt}/{len(self.url_attempts)}")
                     self.webEngineView.setUrl(QtCore.QUrl(self.url_attempts[self.current_attempt]))
+                else:
+                    print("모든 URL 시도 실패, 데스크톱 버전으로 대체")
+                    self.webEngineView.setUrl(QtCore.QUrl("https://finance.naver.com/"))
+                    self.current_attempt = 0
+                return
+
+            # 5초 후 로딩 상태 확인
+            QtCore.QTimer.singleShot(5000, lambda: self.page.runJavaScript("""
+                (function() {
+                    // '로딩중' 텍스트가 포함된 요소를 찾기 위해 순수 JavaScript 사용
+                    const elements = document.getElementsByTagName('*');
+                    let loadingFound = false;
+                    for (let i = 0; i < elements.length; i++) {
+                        if (elements[i].textContent.includes('로딩중')) {
+                            loadingFound = true;
+                            break;
+                        }
+                    }
+                    return loadingFound ? 'loading' : 'complete';
+                })();
+            """, self.on_js_complete))
+
+        def on_js_complete(self, result):
+            print(f"JS 실행 결과: {result}")
+            if result == 'loading' and self.current_attempt < 3:  # 재시도 제한 추가
+                self.current_attempt += 1
+                print(f"부분 로드 감지, 재시도 {self.current_attempt}/3")
+                self.webEngineView.reload()
+            elif result == 'complete':
+                print("페이지 로드 완료")
+                self.current_attempt = 0  # 성공 시 재시도 카운터 초기화
+            else:
+                print("예기치 않은 JS 결과, 재시도 중단")
+                self.current_attempt = 0
 
         def load_stock_lists(self):
             hold_stocks = self.config_manager.load_stock_list('stock_hold.txt')
@@ -234,7 +299,7 @@ class UIManager(QMainWindow):
         def add_stock_to_list(self, list_type):
             target_list = self.lb_hold if list_type == 'hold' else self.lb_int
             filename = f'stock_{list_type}.txt'
-            
+
             company_to_add = self.current_searched_stock
 
             if company_to_add:
@@ -249,14 +314,14 @@ class UIManager(QMainWindow):
         def remove_stock_from_list(self, list_type):
             list_widget = self.lb_hold if list_type == 'hold' else self.lb_int
             filename = f'stock_{list_type}.txt'
-            
+
             selected_item = list_widget.currentItem()
             if selected_item:
                 item_text = selected_item.text()
-                
+
                 row = list_widget.row(selected_item)
                 list_widget.takeItem(row)
-                
+
                 if filename:
                     self.config_manager.remove_stock_from_list(filename, item_text)
             else:
