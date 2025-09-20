@@ -30,7 +30,6 @@ class UIManager(QMainWindow):
             self.render_failure_count = 0
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
             self.max_render_failures = 3
-
             self.page = QWebEnginePage()
             self.webEngineView.setPage(self.page)
             self.page.javaScriptConsoleMessage = self.handle_js_console_message
@@ -109,6 +108,51 @@ class UIManager(QMainWindow):
             self.search_condition_text_1 = search_cond1
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
+
+        def _create_mobile_profile(self):
+            """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
+            profile = QWebEngineProfile(self)
+            profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
+            profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
+            profile.setHttpAcceptLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
+
+            user_agent = profile.httpUserAgent()
+            if "Mobile" not in user_agent:
+                profile.setHttpUserAgent(
+                    "Mozilla/5.0 (Linux; Android 13; SM-S918N) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36"
+                )
+
+            return profile
+
+        def _apply_profile_to_view(self, profile):
+            """새로운 프로필을 웹뷰에 적용하고 관련 핸들러를 재연결합니다."""
+            if hasattr(self, "page") and self.page is not None:
+                try:
+                    self.page.deleteLater()
+                except RuntimeError:
+                    pass
+
+            self.page = QWebEnginePage(profile, self.webEngineView)
+            self.webEngineView.setPage(self.page)
+            self.page.javaScriptConsoleMessage = self.handle_js_console_message
+
+        def _reset_mobile_profile(self, rebuild=False):
+            """모바일 페이지용 프로필을 초기화하거나 캐시를 정리합니다."""
+            if rebuild or self.mobile_profile is None:
+                if getattr(self, "mobile_profile", None) is not None:
+                    try:
+                        self.mobile_profile.deleteLater()
+                    except RuntimeError:
+                        pass
+                self.mobile_profile = self._create_mobile_profile()
+            else:
+                self.mobile_profile.clearHttpCache()
+                cookie_store = self.mobile_profile.cookieStore()
+                if cookie_store is not None:
+                    cookie_store.deleteAllCookies()
+
+            self._apply_profile_to_view(self.mobile_profile)
 
         def handle_render_process_terminated(self, process, status):
             """웹페이지 렌더링 프로세스가 다운되면 자동으로 페이지를 다시 로드하는 함수입니다."""
