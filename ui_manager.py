@@ -31,7 +31,6 @@ class UIManager(QMainWindow):
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
             self.mobile_profile = None
             self.max_render_failures = 3
-
             self.page = QWebEnginePage()
             self.webEngineView.setPage(self.page)
             self.page.javaScriptConsoleMessage = self.handle_js_console_message
