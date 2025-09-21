@@ -345,7 +345,6 @@ class UIManager(base_class, form_class):
             """, self.on_js_complete))
 
         def on_js_complete(self, result):
-            print(f"JS 실행 결과: {result}")
             # 'loading' 상태이고, 재시도 횟수가 3회 미만일 경우
             if result == 'loading' and self.current_attempt < 3:
                 self.current_attempt += 1

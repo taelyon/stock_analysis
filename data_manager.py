@@ -202,8 +202,10 @@ class DataManager:
     def get_stock_urls(self, code, country):
         """네이버 금융 페이지의 URL 목록을 생성합니다."""
         if country == "kr":
+            print(code)
             return [f"https://m.stock.naver.com/domestic/stock/{code}/total"]
         elif country == "us":
+            print(code)
             return [
                 f"https://m.stock.naver.com/worldstock/stock/{code}/total",
                 f"https://m.stock.naver.com/worldstock/stock/{code}.O/total",
