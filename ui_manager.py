@@ -29,10 +29,10 @@ class UIManager(QMainWindow):
             self.current_searched_stock = None
             self.render_failure_count = 0
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
+
             self.max_render_failures = 3
-            self.page = QWebEnginePage()
-            self.webEngineView.setPage(self.page)
-            self.page.javaScriptConsoleMessage = self.handle_js_console_message
+            self.page = None  # page 속성을 None으로 초기화
+            self.mobile_profile = None # mobile_profile 속성을 None으로 초기화
             self.webEngineView.loadFinished.connect(self.handle_load_finished)
 
             self.connect_signals()
@@ -90,12 +90,17 @@ class UIManager(QMainWindow):
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
+            self._reset_mobile_profile(rebuild=True) # 이 코드를 추가
             # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
             settings.setAttribute(QWebEngineSettings.PluginsEnabled, False)
             settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
             settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)  # Optional, as needed
+
+            # 아래 2줄의 그래픽 가속 옵션을 추가합니다.
+            settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
+            settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
 
             self.webEngineView.setUrl(self.mobile_home_url)
             self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
@@ -113,15 +118,15 @@ class UIManager(QMainWindow):
             """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
             profile = QWebEngineProfile(self)
             profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
-            profile.setPersistentCookiesPolicy(QWebEngineProfile.NoPersistentCookies)
+            profile.setPersistentCookiesPolicy(QWebEngineProfile.AllowPersistentCookies)
             profile.setHttpAcceptLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
 
-            user_agent = profile.httpUserAgent()
-            if "Mobile" not in user_agent:
-                profile.setHttpUserAgent(
-                    "Mozilla/5.0 (Linux; Android 13; SM-S918N) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/124.0.6367.179 Mobile Safari/537.36"
-                )
+            # User-Agent를 최신 안드로이드 크롬 버전으로 변경합니다.
+            new_user_agent = (
+                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/140.0.7339.124 Mobile Safari/537.36"
+            )
+            profile.setHttpUserAgent(new_user_agent)
 
             return profile
 
