@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings
+from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from data_manager import DataManager
 from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
