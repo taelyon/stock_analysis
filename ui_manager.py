@@ -133,6 +133,7 @@ class UIManager(base_class, form_class):
             self.search_condition_text_1 = search_cond1
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
+            self.update_portfolio_textbox() # UI 초기화 시 포트폴리오 텍스트박스 업데이트
 
         def _create_mobile_profile(self):
             """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
@@ -302,9 +303,11 @@ class UIManager(base_class, form_class):
                 print(f"종목 '{company}' 클릭 처리 중 오류 발생: {e}")
 
         def show_stock_info(self, company):
-            code, country = self.data_manager.get_stock_info(company)
+            # get_stock_info가 market 정보도 반환하도록 수정
+            code, country, market = self.data_manager.get_stock_info(company)
             if code and country:
-                self.url_attempts = self.data_manager.get_stock_urls(code, country)
+                # get_stock_urls에 market 정보를 전달
+                self.url_attempts = self.data_manager.get_stock_urls(code, country, market)
                 if self.url_attempts:
                     self.current_attempt = 0
                     self.error_detected = False
@@ -374,6 +377,8 @@ class UIManager(base_class, form_class):
                 if not target_list.findItems(company_to_add, QtCore.Qt.MatchFlag.MatchExactly):
                     target_list.addItem(company_to_add)
                     self.config_manager.add_stock_to_list(filename, company_to_add)
+                    if list_type == 'hold': # 보유 종목에 추가되면 포트폴리오 업데이트
+                        self.update_portfolio_textbox()
                 else:
                     print(f"'{company_to_add}'은(는) 이미 목록에 존재합니다.")
             else:
@@ -392,6 +397,9 @@ class UIManager(base_class, form_class):
 
                 if filename:
                     self.config_manager.remove_stock_from_list(filename, item_text)
+                
+                if list_type == 'hold': # 보유 종목에서 삭제되면 포트폴리오 업데이트
+                    self.update_portfolio_textbox()
             else:
                 list_name_map = {'hold': '보유', 'interest': '관심'}
                 print(f"{list_name_map.get(list_type, '')} 목록에서 삭제할 항목이 선택되지 않았습니다.")
@@ -406,7 +414,16 @@ class UIManager(base_class, form_class):
                 self.stock_list_item_clicked(selected_item)
             else:
                 print(f"리스트에서 선택된 종목이 없습니다.")
+
+        def update_portfolio_textbox(self):
+            """보유 종목 리스트(lb_hold)의 내용을 포트폴리오 텍스트박스(portfolio)에 업데이트합니다."""
+            # lb_hold 리스트 위젯의 모든 아이템을 가져옵니다.
+            items = [self.lb_hold.item(i).text() for i in range(self.lb_hold.count())]
+            # 쉼표로 구분된 하나의 문자열로 합칩니다.
+            portfolio_text = ", ".join(items)
+            # portfolio 텍스트박스에 설정합니다.
+            self.portfolio.setText(portfolio_text)
+
     except Exception as e:
         print(f"UIManager 초기화 중 오류 발생: {e}")
         raise
-

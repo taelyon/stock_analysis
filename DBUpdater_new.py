@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 import requests
 import re
 import yfinance as yf
-# from tqdm import tqdm # tqdm 라이브러리를 더 이상 사용하지 않으므로 삭제합니다.
 import exchange_calendars as xcals
 import warnings
 import threading
@@ -100,27 +99,64 @@ class DBUpdater(DBManager):
         conn.commit()
         
     def us_stock_listing(self):
+        """ S&P 500 종목을 가져오되, market 열에는 실제 상장 거래소를 표시합니다. """
         conn, cur = self._get_db_conn()
+        
+        # 1. 모든 미국 거래소의 전체 종목 목록을 가져와 조회용 테이블 생성
+        print("미국 전체 거래소 목록을 조회합니다 (NASDAQ, NYSE, AMEX)...")
+        market_map = {}
+        for market in ['NASDAQ', 'NYSE', 'AMEX']:
+            try:
+                market_df = fdr.StockListing(market)
+                # market_df에는 'Market' 열이 없으므로, 현재 조회 중인 market의 이름을 직접 사용
+                # 'Symbol'을 키로, market 이름을 값으로 하는 딕셔너리를 생성하여 market_map에 추가
+                market_map.update(pd.Series(market, index=market_df.Symbol).to_dict())
+                print(f"{market} 목록 조회 완료.")
+            except Exception as e:
+                print(f"{market} 목록 조회 실패: {e}")
+        
+        # 2. S&P 500 종목 목록 가져오기
+        print("S&P 500 목록을 가져옵니다...")
         try:
             url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
             headers = {'User-agent': 'Mozilla/5.0'}
             response = requests.get(url, headers=headers)
             sp500_list = pd.read_html(response.text)[0]
             sp500_list = sp500_list[['Symbol', 'Security']].rename(columns={'Symbol': 'code', 'Security': 'company'})
-            sp500_list['market'] = 'S&P500'
         except Exception as e:
             print(f"S&P 500 목록을 가져오는 데 실패했습니다: {e}")
             return
+            
+        # 3. S&P 500 목록에 실제 거래소 정보 매핑
+        # 3-1. 원본 심볼로 거래소 정보 매핑 시도
+        sp500_list['market'] = sp500_list['code'].map(market_map)
 
+        # 3-2. 매핑 실패한 종목에 대해 심볼 형식 변경 후 재시도 (예: 'BRK.B' -> 'BRK-B')
+        unmatched_symbols = sp500_list['market'].isna()
+        if unmatched_symbols.any():
+            print("일부 종목의 거래소 정보를 다시 조회합니다 (심볼 형식 변경)...")
+            # '.'을 '-'로 변경한 심볼 생성
+            normalized_codes = sp500_list.loc[unmatched_symbols, 'code'].str.replace('.', '-', regex=False)
+            # 변경된 심볼로 다시 매핑
+            sp500_list.loc[unmatched_symbols, 'market'] = normalized_codes.map(market_map)
+
+        # 3-3. 그래도 찾지 못한 경우 'N/A'로 채움
+        sp500_list['market'].fillna('N/A', inplace=True)
+        
         sp500_list['country'] = 'us'
         today = datetime.today().strftime('%Y-%m-%d')
         sp500_list['updated_date'] = today
 
+        # 4. DB에 저장
+        print("S&P 500 종목 정보를 실제 거래소 정보와 함께 DB에 저장합니다.")
         for r in sp500_list.itertuples():
             company_name = r.company.replace("'", "''")
             sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', '{company_name}', '{r.market}', '{r.country}', '{r.updated_date}')"
             cur.execute(sql)
         conn.commit()
+
+        na_count = (sp500_list['market'] == 'N/A').sum()
+        print(f"총 {len(sp500_list)}개의 S&P 500 종목 정보 업데이트를 완료했습니다. (거래소 정보 N/A: {na_count}개)")
 
     def update_comp_info(self, nation='all'):
         conn, cur = self._get_db_conn()

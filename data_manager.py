@@ -17,14 +17,16 @@ class DataManager:
         with self.db_lock:
             stock_info_df = self.market_db.get_comp_info(company)
             if not stock_info_df.empty:
-                return stock_info_df.iloc[0]['code'], stock_info_df.iloc[0]['country']
+                # market 정보가 없을 수도 있는 구버전 DB 호환을 위해 .get() 사용
+                market = stock_info_df.iloc[0].get('market')
+                return stock_info_df.iloc[0]['code'], stock_info_df.iloc[0]['country'], market
             
             print(f"DB에 '{company}' 정보가 없어 인터넷에서 검색합니다.")
             try:
                 markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX']
-                for market in markets:
-                    df_stocks = fdr.StockListing(market)
-                    code_col = 'Code' if market == 'KRX' else 'Symbol'
+                for market_name in markets:
+                    df_stocks = fdr.StockListing(market_name)
+                    code_col = 'Code' if market_name == 'KRX' else 'Symbol'
                     if code_col not in df_stocks.columns or 'Name' not in df_stocks.columns:
                         continue
                     
@@ -36,26 +38,26 @@ class DataManager:
                     if not stock.empty:
                         code = stock.iloc[0][code_col]
                         name = stock.iloc[0]['Name']
-                        country = 'us' if market != 'KRX' else 'kr'
+                        country = 'us' if market_name != 'KRX' else 'kr'
                         
-                        print(f"인터넷에서 종목을 찾았습니다: 코드='{code}', 이름='{name}', 국가='{country}'")
+                        print(f"인터넷에서 종목을 찾았습니다: 코드='{code}', 이름='{name}', 국가='{country}', 마켓='{market_name}'")
                         
                         conn, cur = self.market_db._get_db_conn()
                         with conn:
                             cur.execute(
-                                "INSERT OR IGNORE INTO comp_info (code, company, country) VALUES (?, ?, ?)",
-                                (code, name, country)
+                                "INSERT OR IGNORE INTO comp_info (code, company, country, market) VALUES (?, ?, ?, ?)",
+                                (code, name, country, market_name)
                             )
                         print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.")
                         
                         self.db_updater.update_single_stock_all_data(name)
-                        return code, country
+                        return code, country, market_name
                 
                 print(f"'{company}'에 대한 종목 정보를 인터넷에서도 찾을 수 없습니다.")
-                return None, None
+                return None, None, None
             except Exception as e:
                 print(f"인터넷에서 종목 정보 조회 중 오류 발생: {e}")
-                return None, None
+                return None, None, None
 
     def update_recent_stock_data(self, code):
         """특정 종목의 최신 시세 데이터를 DB에 덮어쓰기하여 업데이트합니다."""
@@ -86,7 +88,8 @@ class DataManager:
         종목의 일별 시세를 조회하고 보조지표를 계산합니다.
         start_date가 없으면 차트용(최신 업데이트 + 3개월 조회), 있으면 해당 날짜부터 조회합니다.
         """
-        code, country = self.get_stock_info(company)
+        # get_stock_info 반환값이 3개로 변경됨 (code, country, market)
+        code, _, _ = self.get_stock_info(company)
         if code is None:
             return None
 
@@ -199,16 +202,35 @@ class DataManager:
         df.dropna(subset=['open', 'high', 'low', 'close'], inplace=True)
         return df
 
-    def get_stock_urls(self, code, country):
+    def get_stock_urls(self, code, country, market):
         """네이버 금융 페이지의 URL 목록을 생성합니다."""
         if country == "kr":
-            print(code)
             return [f"https://m.stock.naver.com/domestic/stock/{code}/total"]
+        
         elif country == "us":
-            print(code)
-            return [
-                f"https://m.stock.naver.com/worldstock/stock/{code}/total",
-                f"https://m.stock.naver.com/worldstock/stock/{code}.O/total",
-                f"https://m.stock.naver.com/worldstock/stock/{code}.K/total"
-            ]
+            # market 정보에 따라 적절한 URL을 생성
+            if market == 'NASDAQ':
+                return [f"https://m.stock.naver.com/worldstock/stock/{code}.O/total"]
+            
+            elif market == 'NYSE':
+                # IONQ와 같은 특정 예외 케이스 처리
+                if code == 'IONQ':
+                    return [f"https://m.stock.naver.com/worldstock/stock/{code}.K/total"]
+                return [f"https://m.stock.naver.com/worldstock/stock/{code}/total"]
+            
+            elif market == 'AMEX':
+                # AMEX는 기본 URL과 .K를 순차 시도
+                return [
+                    f"https://m.stock.naver.com/worldstock/stock/{code}/total",
+                    f"https://m.stock.naver.com/worldstock/stock/{code}.K/total"
+                ]
+
+            # market 정보가 없거나(N/A) 예상치 못한 값일 경우, 기존처럼 모든 가능성을 시도
+            else:
+                return [
+                    f"https://m.stock.naver.com/worldstock/stock/{code}/total",
+                    f"https://m.stock.naver.com/worldstock/stock/{code}.O/total",
+                    f"https://m.stock.naver.com/worldstock/stock/{code}.K/total"
+                ]
+                
         return []
