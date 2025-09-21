@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import mplfinance as mpf
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 import re
 
 class ChartManager:

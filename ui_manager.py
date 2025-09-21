@@ -1,6 +1,7 @@
-from PyQt5 import QtCore, QtGui, QtWidgets, uic
-from PyQt5.QtWidgets import QMainWindow
-from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtUiTools import loadUiType
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from data_manager import DataManager
 from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
@@ -10,12 +11,31 @@ from utils import StdoutRedirect
 from threading import Thread
 import traceback
 
-class UIManager(QMainWindow):
-    graphUpdated = QtCore.pyqtSignal(str)
+# .ui 파일을 로드하여 UI 정의와 기본 클래스를 가져옵니다.
+form_class, base_class = loadUiType("stock_analysis.ui")
+
+# [FIX] JavaScript 콘솔 메시지를 처리하기 위한 사용자 정의 QWebEnginePage 클래스
+class CustomWebEnginePage(QWebEnginePage):
+    """JavaScript 콘솔 메시지를 처리하기 위해 QWebEnginePage를 상속받는 클래스."""
+    def __init__(self, profile, parent=None):
+        super().__init__(profile, parent)
+        self.console_message_handler = None
+
+    def javaScriptConsoleMessage(self, level, message, lineNumber, sourceId):
+        """
+        메서드를 재정의하여 JavaScript 콘솔 메시지를 외부 핸들러로 전달합니다.
+        """
+        if self.console_message_handler:
+            self.console_message_handler(level, message, lineNumber, sourceId)
+
+
+class UIManager(base_class, form_class):
+    graphUpdated = QtCore.Signal(str)
     try:
         def __init__(self):
             super().__init__()
-            uic.loadUi('stock_analysis.ui', self)
+            # setupUi를 호출하여 .ui 파일에 정의된 위젯들을 초기화합니다.
+            self.setupUi(self)
 
             self.data_manager = DataManager()
             self.chart_manager = ChartManager(self.verticalLayout_2, self.verticalLayout_7, self.imagelabel_3)
@@ -93,14 +113,14 @@ class UIManager(QMainWindow):
             self._reset_mobile_profile(rebuild=True) # 이 코드를 추가
             # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
-            settings.setAttribute(QWebEngineSettings.PluginsEnabled, False)
-            settings.setAttribute(QWebEngineSettings.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
-            settings.setAttribute(QWebEngineSettings.JavascriptCanAccessClipboard, True)  # Optional, as needed
+            settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)  # Optional, as needed
 
             # 아래 2줄의 그래픽 가속 옵션을 추가합니다.
-            settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
-            settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
+            settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
 
             self.webEngineView.setUrl(self.mobile_home_url)
             self.dateEdit_start.setDate(QtCore.QDate(2024, 1, 1))
@@ -117,8 +137,8 @@ class UIManager(QMainWindow):
         def _create_mobile_profile(self):
             """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
             profile = QWebEngineProfile(self)
-            profile.setHttpCacheType(QWebEngineProfile.MemoryHttpCache)
-            profile.setPersistentCookiesPolicy(QWebEngineProfile.AllowPersistentCookies)
+            profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.MemoryHttpCache)
+            profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
             profile.setHttpAcceptLanguage("ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7")
 
             # User-Agent를 최신 안드로이드 크롬 버전으로 변경합니다.
@@ -138,9 +158,11 @@ class UIManager(QMainWindow):
                 except RuntimeError:
                     pass
 
-            self.page = QWebEnginePage(profile, self.webEngineView)
+            # [FIX] 사용자 정의 WebEnginePage 클래스를 사용합니다.
+            self.page = CustomWebEnginePage(profile, self)
+            self.page.console_message_handler = self.handle_js_console_message
             self.webEngineView.setPage(self.page)
-            self.page.javaScriptConsoleMessage = self.handle_js_console_message
+
 
         def _reset_mobile_profile(self, rebuild=False):
             """모바일 페이지용 프로필을 초기화하거나 캐시를 정리합니다."""
@@ -350,7 +372,7 @@ class UIManager(QMainWindow):
             company_to_add = self.current_searched_stock
 
             if company_to_add:
-                if not target_list.findItems(company_to_add, QtCore.Qt.MatchExactly):
+                if not target_list.findItems(company_to_add, QtCore.Qt.MatchFlag.MatchExactly):
                     target_list.addItem(company_to_add)
                     self.config_manager.add_stock_to_list(filename, company_to_add)
                 else:
@@ -376,7 +398,7 @@ class UIManager(QMainWindow):
                 print(f"{list_name_map.get(list_type, '')} 목록에서 삭제할 항목이 선택되지 않았습니다.")
 
         def _append_text(self, msg):
-            self.log_widget.moveCursor(QtGui.QTextCursor.End)
+            self.log_widget.moveCursor(QtGui.QTextCursor.MoveOperation.End)
             self.log_widget.insertPlainText(msg)
 
         def select_item_in_list(self, target_list_widget):
@@ -388,3 +410,4 @@ class UIManager(QMainWindow):
     except Exception as e:
         print(f"UIManager 초기화 중 오류 발생: {e}")
         raise
+

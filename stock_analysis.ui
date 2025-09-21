@@ -1321,7 +1321,7 @@
   <customwidget>
    <class>QWebEngineView</class>
    <extends>QWidget</extends>
-   <header location="global">QtWebEngineWidgets/QWebEngineView</header>
+   <header location="global">PySide6.QtWebEngineWidgets</header>
   </customwidget>
  </customwidgets>
  <resources/>

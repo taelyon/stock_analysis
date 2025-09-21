@@ -1,8 +1,8 @@
 import sys
-from PyQt5.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 class StdoutRedirect(QObject):
-    printOccur = pyqtSignal(str, name="print")
+    printOccur = Signal(str, name="print")
 
     try:
         def __init__(self):
