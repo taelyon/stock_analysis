@@ -149,11 +149,18 @@ class ChartManager:
 
     def plot_backtest_results(self, cerebro):
         """백테스팅 결과를 별도 창 없이 UI 내부에 플롯합니다."""
-        # 기존 백테스팅 캔버스 제거
-        if self.canvas_backtest is not None:
-            self.backtest_layout.removeWidget(self.canvas_backtest)
-            self.canvas_backtest.deleteLater()
-            self.canvas_backtest = None
+        # 기존 레이아웃의 모든 위젯 제거 (최적화 차트 포함)
+        while self.backtest_layout.count():
+            item = self.backtest_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        # Matplotlib Figure 상태 정리
+        plt.close('all')
+
+        # 기존 백테스팅 캔버스 참조 정리 (deleteLater() 중복 방지)
+        self.canvas_backtest = None
 
         fig_backtest = None
         try:

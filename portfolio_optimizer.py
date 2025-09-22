@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Qt 환경에 적합한 백엔드
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -68,10 +70,18 @@ class PortfolioOptimizer:
             return f'<b>{title}:</b>' + df_percent.to_html(index=False, border=0)
 
         def plot_portfolio(self, df_port, max_sharpe, min_risk):
-            if self.canvas:
-                self.layout.removeWidget(self.canvas)
-                self.canvas.figure.clf()
-                self.canvas.close()
+            # 기존 레이아웃의 모든 위젯 제거 (백테스팅 캔버스 포함)
+            while self.layout.count():
+                item = self.layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+
+            # Matplotlib Figure 상태 정리
+            plt.close('all')
+
+            # 기존 캔버스 참조 정리 (deleteLater() 중복 방지)
+            self.canvas = None
 
             fig = Figure()
             ax = fig.add_subplot(111)
