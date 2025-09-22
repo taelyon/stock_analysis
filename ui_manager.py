@@ -242,6 +242,37 @@ class UIManager(base_class, form_class):
             if df is not None and not df.empty:
                 self.backtester.run_backtesting(df, company, start_date, buy_condition, sell_condition)
 
+        def closeEvent(self, event):
+            """Ensure WebEngine resources are released before the window closes."""
+            try:
+                if getattr(self, 'webEngineView', None) is not None:
+                    self.webEngineView.setPage(None)
+            except Exception:
+                pass
+
+            page = getattr(self, 'page', None)
+            if page is not None:
+                try:
+                    page.deleteLater()
+                except RuntimeError:
+                    pass
+                self.page = None
+
+            profile = getattr(self, 'mobile_profile', None)
+            if profile is not None:
+                try:
+                    cookie_store = profile.cookieStore()
+                    if cookie_store is not None:
+                        cookie_store.deleteAllCookies()
+                except Exception:
+                    pass
+                try:
+                    profile.deleteLater()
+                except RuntimeError:
+                    pass
+                self.mobile_profile = None
+
+            super().closeEvent(event)
         def run_portfolio_optimization(self):
             stock_names = self.portfolio.text().split(',')
             stock_names = [name.strip() for name in stock_names if name.strip()]
