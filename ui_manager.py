@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtGui, QtWidgets
+﻿from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtUiTools import loadUiType
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
@@ -243,7 +243,8 @@ class UIManager(base_class, form_class):
         def run_portfolio_optimization(self):
             stock_names = self.portfolio.text().split(',')
             stock_names = [name.strip() for name in stock_names if name.strip()]
-            self.portfolio_optimizer.optimize_portfolio(stock_names)
+            start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
+            self.portfolio_optimizer.optimize_portfolio(stock_names, start_date)
 
         def save_search_condition(self):
             if self.radioButton.isChecked():

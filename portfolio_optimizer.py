@@ -1,11 +1,12 @@
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Qt 환경에 적합한 백엔드
+matplotlib.use('Agg')  # Use non-interactive backend for Qt compatibility
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import DBUpdater_new
+
 
 class PortfolioOptimizer:
     try:
@@ -15,34 +16,63 @@ class PortfolioOptimizer:
             self.mk = DBUpdater_new.MarketDB()
             self.canvas = None
 
-        def optimize_portfolio(self, stock_list):
+        def optimize_portfolio(self, stock_list, start_date=None):
+            if not stock_list:
+                self.text_browser.clear()
+                self.text_browser.append('No stocks provided for optimization.')
+                return
+
+            start_date = start_date or '2022-01-01'
             df_port = pd.DataFrame()
-            for s in stock_list:
-                df_port[s] = self.mk.get_daily_price(s, '2022-01-01')['close']
-            
-            daily_ret = df_port.pct_change() 
+            skipped = []
+
+            for symbol in stock_list:
+                price_df = self.mk.get_daily_price(symbol, start_date)
+                if price_df is None or price_df.empty or 'close' not in price_df:
+                    skipped.append(symbol)
+                    continue
+                df_port[symbol] = price_df['close']
+
+            if df_port.empty:
+                self.text_browser.clear()
+                self.text_browser.append('No price data available for the selected stocks and start date.')
+                if skipped:
+                    self.text_browser.append('Skipped symbols: ' + ', '.join(skipped))
+                return
+
+            available_stocks = list(df_port.columns)
+            if skipped:
+                self.text_browser.append('Skipped symbols: ' + ', '.join(skipped))
+
+            daily_ret = df_port.pct_change().dropna()
+            if daily_ret.empty:
+                self.text_browser.append('Not enough price history after the selected start date to run optimization.')
+                return
+
             annual_ret = daily_ret.mean() * 252
-            daily_cov = daily_ret.cov() 
+            daily_cov = daily_ret.cov()
             annual_cov = daily_cov * 252
 
-            port_ret, port_risk, port_weights, sharpe_ratio = self.generate_portfolios(stock_list, annual_ret, annual_cov)
+            port_ret, port_risk, port_weights, sharpe_ratio = self.generate_portfolios(
+                available_stocks, annual_ret, annual_cov
+            )
 
             portfolio = {'Returns': port_ret, 'Risk': port_risk, 'Sharpe': sharpe_ratio}
-            for i, s in enumerate(stock_list): 
-                portfolio[s] = [weight[i] for weight in port_weights]
+            for idx, symbol in enumerate(available_stocks):
+                portfolio[symbol] = [weight[idx] for weight in port_weights]
 
-            df_port = pd.DataFrame(portfolio)
-            max_sharpe = df_port.loc[df_port['Sharpe'] == df_port['Sharpe'].max()]
-            min_risk = df_port.loc[df_port['Risk'] == df_port['Risk'].min()]
-            
-            self.display_results(df_port, max_sharpe, min_risk)
+            results_df = pd.DataFrame(portfolio)
+            max_sharpe = results_df.loc[results_df['Sharpe'] == results_df['Sharpe'].max()]
+            min_risk = results_df.loc[results_df['Risk'] == results_df['Risk'].min()]
+
+            self.display_results(results_df, max_sharpe, min_risk)
 
         def generate_portfolios(self, stock_list, annual_ret, annual_cov):
             if len(stock_list) == 1:
-                port_ret = [annual_ret[0]]
+                port_ret = [annual_ret.iloc[0]]
                 port_risk = [np.sqrt(annual_cov.iloc[0, 0])]
-                port_weights = [[1]]
-                sharpe_ratio = [port_ret[0] / port_risk[0]]
+                port_weights = [[1.0]]
+                sharpe_ratio = [port_ret[0] / port_risk[0] if port_risk[0] else 0.0]
             else:
                 port_weights = np.random.random((20000, len(stock_list)))
                 port_weights /= np.sum(port_weights, axis=1)[:, np.newaxis]
@@ -53,9 +83,11 @@ class PortfolioOptimizer:
 
         def display_results(self, df_port, max_sharpe, min_risk):
             self.text_browser.clear()
-            self.text_browser.setHtml(self.format_html_output(max_sharpe, "Max Sharpe Ratio") +
-                                    '<br><br>' + 
-                                    self.format_html_output(min_risk, "Min Risk"))
+            self.text_browser.setHtml(
+                self.format_html_output(max_sharpe, 'Max Sharpe Ratio') +
+                '<br><br>' +
+                self.format_html_output(min_risk, 'Min Risk')
+            )
             self.plot_portfolio(df_port, max_sharpe, min_risk)
 
         def format_html_output(self, df, title):
@@ -70,17 +102,13 @@ class PortfolioOptimizer:
             return f'<b>{title}:</b>' + df_percent.to_html(index=False, border=0)
 
         def plot_portfolio(self, df_port, max_sharpe, min_risk):
-            # 기존 레이아웃의 모든 위젯 제거 (백테스팅 캔버스 포함)
             while self.layout.count():
                 item = self.layout.takeAt(0)
                 widget = item.widget()
                 if widget is not None:
                     widget.deleteLater()
 
-            # Matplotlib Figure 상태 정리
             plt.close('all')
-
-            # 기존 캔버스 참조 정리 (deleteLater() 중복 방지)
             self.canvas = None
 
             fig = Figure()
@@ -100,4 +128,4 @@ class PortfolioOptimizer:
             self.layout.addWidget(self.canvas)
             self.canvas.draw()
     except Exception as e:
-        print(f"PortfolioOptimizer initialization error: {e}")
+        print(f'PortfolioOptimizer initialization error: {e}')
