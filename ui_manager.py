@@ -80,6 +80,7 @@ class UIManager(base_class, form_class):
             self.BacktestingButton.clicked.connect(self.run_backtesting)
             self.lineEdit_stock.returnPressed.connect(self.run_backtesting)
             self.optimize_button.clicked.connect(self.run_portfolio_optimization)
+            self.tabWidget.currentChanged.connect(self.on_tab_changed)
 
             self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
             self.SearchConditionInputButton_2.clicked.connect(self.load_search_condition_1)
@@ -247,6 +248,29 @@ class UIManager(base_class, form_class):
             start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
             self.portfolio_optimizer.optimize_portfolio(stock_names, start_date)
 
+        def on_tab_changed(self, index):
+            backtesting_widget = getattr(self, 'tab_2', None)
+            if backtesting_widget is None:
+                return
+
+            backtesting_index = self.tabWidget.indexOf(backtesting_widget)
+            if index != backtesting_index:
+                return
+
+            company = getattr(self, 'current_searched_stock', None)
+            if not company:
+                for list_widget in (self.lb_search, self.lb_hold, self.lb_int):
+                    current_item = list_widget.currentItem()
+                    if current_item:
+                        candidate = current_item.text().strip()
+                        if candidate:
+                            company = candidate
+                            break
+            if not company:
+                return
+
+            self.lineEdit_stock.setText(company)
+            self.run_backtesting()
         def save_search_condition(self):
             if self.radioButton.isChecked():
                 self.search_condition_text_1 = self.lineEditSearchCondition.text()
