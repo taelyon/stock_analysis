@@ -101,10 +101,6 @@ class ChartManager:
     def plot_signals(self, ax, df, search_condition_1, search_condition_2):
         for i in range(1, len(df.close)):
             try:
-                # eval에 전달할 데이터프레임의 행을 iloc으로 명확히 지정하여 안정성 향상
-                current_df_row_scope = {'df': df.iloc[i]}
-                prev_df_row_scope = {'df': df.iloc[i-1]}
-                
                 # 조건식에서 df[-1]과 같은 상대적 인덱싱을 현재 행 기준으로 변환
                 # 이 부분은 현재 구조에서는 복잡하므로, 탐색 조건식을 iloc 기반으로 작성하는 것을 권장합니다.
                 # 현재 로직은 단순화를 위해 그대로 두지만, 복잡한 조건식에서 오류가 발생할 수 있습니다.
@@ -113,7 +109,7 @@ class ChartManager:
                 if search_condition_2 and eval(search_condition_2, {}, {'df': df.iloc[:i+1]}):
                      ax.plot(df.index[i], df['low'].iloc[i] * 0.97, "r^", markersize=8, markeredgecolor="black")
             except Exception as e:
-                # print(f"신호 조건 평가 중 오류 발생 (인덱스 {i}): {e}")
+                print(f"신호 조건 평가 중 오류 발생 (인덱스 {i}): {e}")
                 pass
 
             if ((df['ema5'].iloc[i-1] > df['ema10'].iloc[i-1] and df['ema5'].iloc[i] < df['ema10'].iloc[i]) or
