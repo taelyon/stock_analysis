@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -31,27 +33,36 @@ class ChartManager:
         if self.logo_widget:
             self.logo_widget.hide()
 
+        # 기존 캔버스 제거 및 새로 생성
+        if self.canvas_main is not None:
+            self.chart_layout.removeWidget(self.canvas_main)
+            self.canvas_main.deleteLater()
+            self.canvas_main = None
+            self.fig_main = None
+
+        # 새 Figure와 Canvas 생성
+        self.fig_main = plt.figure()
+        self.canvas_main = FigureCanvas(self.fig_main)
+        self.chart_layout.addWidget(self.canvas_main)
+
         if df is None or df.empty:
-            self.fig_main.clear()
             ax = self.fig_main.add_subplot(111)
             ax.text(0.5, 0.5, f"'{company}'의 차트 데이터를 표시할 수 없습니다.", 
                     horizontalalignment='center', verticalalignment='center')
             self.canvas_main.draw()
             return
-            
+
         # 차트에 표시할 데이터를 최근 3개월(약 65 거래일)으로 제한합니다.
         df = df.iloc[-65:]
 
         if df.empty:
-            self.fig_main.clear()
             ax = self.fig_main.add_subplot(111)
             ax.text(0.5, 0.5, f"'{company}'의 최근 3개월 데이터가 없습니다.",
                     horizontalalignment='center', verticalalignment='center')
             self.canvas_main.draw()
             return
 
-        self.fig_main.clear()
-        
+        # 기존 플롯 로직
         p1 = plt.subplot2grid((9, 4), (0, 0), rowspan=4, colspan=4)
         p4 = plt.subplot2grid((9, 4), (4, 0), rowspan=1, colspan=4, sharex=p1)
         p3 = plt.subplot2grid((9, 4), (5, 0), rowspan=2, colspan=4, sharex=p1)
@@ -137,18 +148,22 @@ class ChartManager:
         ax.legend(loc="best")
 
     def plot_backtest_results(self, cerebro):
-        for i in reversed(range(self.backtest_layout.count())): 
-            widget = self.backtest_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
+        """백테스팅 결과를 별도 창 없이 UI 내부에 플롯합니다."""
+        # 기존에 있던 백테스팅 차트 위젯 제거
+        if self.canvas_backtest is not None:
+            self.backtest_layout.removeWidget(self.canvas_backtest)
+            self.canvas_backtest.deleteLater()
+            self.canvas_backtest = None
 
         fig_backtest = None
         try:
-            figures = cerebro.plot(style='candlestick', barup='green', fmt_x_ticks='%Y-%m-%d')
+            # iplot=False 옵션을 추가하여 새 창이 뜨는 것을 방지
+            figures = cerebro.plot(iplot=False, style='candlestick', barup='green', fmt_x_ticks='%Y-%m-%d')
             
             if not figures or not figures[0]:
                 raise ValueError("결과 없음 (거래 미발생 등)")
             else:
+                # 반환된 Figure 객체를 가져옴
                 fig_backtest = figures[0][0]
 
         except Exception as e:
