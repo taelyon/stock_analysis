@@ -47,6 +47,8 @@ class UIManager(base_class, form_class):
             self.current_attempt = 0
             self.error_detected = False
             self.current_searched_stock = None
+            self.current_searched_code = None
+            self.current_searched_stock_formal_name = None
             self.render_failure_count = 0
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
 
@@ -303,9 +305,11 @@ class UIManager(base_class, form_class):
                 print(f"종목 '{company}' 클릭 처리 중 오류 발생: {e}")
 
         def show_stock_info(self, company):
-            # get_stock_info가 market 정보도 반환하도록 수정
-            code, country, market = self.data_manager.get_stock_info(company)
+            # get_stock_info가 market, formal_name 정보도 반환하도록 수정
+            code, country, market, formal_name = self.data_manager.get_stock_info(company)
             if code and country:
+                self.current_searched_code = code
+                self.current_searched_stock_formal_name = formal_name
                 # get_stock_urls에 market 정보를 전달
                 self.url_attempts = self.data_manager.get_stock_urls(code, country, market)
                 if self.url_attempts:
@@ -355,7 +359,8 @@ class UIManager(base_class, form_class):
                 self.webEngineView.reload() # 페이지 새로고침
             # 'complete' 상태이거나 재시도 횟수를 초과한 경우
             elif result == 'complete':
-                print("페이지 로드 완료")
+                if self.current_searched_stock_formal_name and self.current_searched_code:
+                    print(f"{self.current_searched_stock_formal_name}({self.current_searched_code}) 조회가 완료되었습니다.")
                 self.current_attempt = 0  # 성공했으므로 재시도 카운터를 초기화합니다.
             else: # 'loading' 이지만 재시도 횟수를 초과했거나, 예기치 않은 결과일 경우
                 print("재시도를 중단합니다.")

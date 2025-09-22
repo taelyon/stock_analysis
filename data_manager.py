@@ -1,7 +1,6 @@
 import pandas as pd
 import DBUpdater_new
 from threading import Lock
-from tqdm import tqdm
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
 
@@ -18,9 +17,11 @@ class DataManager:
             stock_info_df = self.market_db.get_comp_info(company)
             if not stock_info_df.empty:
                 # market 정보가 없을 수도 있는 구버전 DB 호환을 위해 .get() 사용
-                market = stock_info_df.iloc[0].get('market')
-                return stock_info_df.iloc[0]['code'], stock_info_df.iloc[0]['country'], market
-            
+                row = stock_info_df.iloc[0]
+                market = row.get('market')
+                # 정식 회사명(company)을 함께 반환하도록 수정
+                return row['code'], row['country'], market, row['company']
+
             print(f"DB에 '{company}' 정보가 없어 인터넷에서 검색합니다.")
             try:
                 markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX']
@@ -31,7 +32,7 @@ class DataManager:
                         continue
                     
                     stock = df_stocks[
-                        (df_stocks[code_col].str.lower() == company.lower()) | 
+                        (df_stocks[code_col].str.lower() == company.lower()) |
                         (df_stocks['Name'].str.lower() == company.lower())
                     ]
                     
@@ -51,18 +52,19 @@ class DataManager:
                         print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.")
                         
                         self.db_updater.update_single_stock_all_data(name)
-                        return code, country, market_name
+                        # 정식 회사명(name)을 함께 반환하도록 수정
+                        return code, country, market_name, name
                 
                 print(f"'{company}'에 대한 종목 정보를 인터넷에서도 찾을 수 없습니다.")
-                return None, None, None
+                return None, None, None, None
             except Exception as e:
                 print(f"인터넷에서 종목 정보 조회 중 오류 발생: {e}")
-                return None, None, None
+                return None, None, None, None
 
     def update_recent_stock_data(self, code):
         """특정 종목의 최신 시세 데이터를 DB에 덮어쓰기하여 업데이트합니다."""
         try:
-            start_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')           
+            start_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')
             df_new = fdr.DataReader(code, start_date)
 
             if df_new.empty:
@@ -88,8 +90,8 @@ class DataManager:
         종목의 일별 시세를 조회하고 보조지표를 계산합니다.
         start_date가 없으면 차트용(최신 업데이트 + 3개월 조회), 있으면 해당 날짜부터 조회합니다.
         """
-        # get_stock_info 반환값이 3개로 변경됨 (code, country, market)
-        code, _, _ = self.get_stock_info(company)
+        # get_stock_info 반환값이 4개로 변경됨 (정식 종목명 추가)
+        code, _, _, _ = self.get_stock_info(company)
         if code is None:
             return None
 
@@ -143,7 +145,7 @@ class DataManager:
                 print("탐색이 중지되었습니다.")
                 break
             
-            df = self.get_daily_price(company, "2024-01-01") 
+            df = self.get_daily_price(company, "2024-01-01")
             
             if df is not None and not df.empty:
                 try:
@@ -162,7 +164,7 @@ class DataManager:
             stock_list = self.market_db.get_comp_info()
         
         if nation != 'all':
-             stock_list = stock_list[stock_list['country'] == nation]
+            stock_list = stock_list[stock_list['country'] == nation]
         return stock_list
 
     def calculate_indicators(self, df):
