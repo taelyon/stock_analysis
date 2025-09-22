@@ -149,7 +149,7 @@ class ChartManager:
 
     def plot_backtest_results(self, cerebro):
         """백테스팅 결과를 별도 창 없이 UI 내부에 플롯합니다."""
-        # 기존에 있던 백테스팅 차트 위젯 제거
+        # 기존 백테스팅 캔버스 제거
         if self.canvas_backtest is not None:
             self.backtest_layout.removeWidget(self.canvas_backtest)
             self.canvas_backtest.deleteLater()
@@ -157,13 +157,12 @@ class ChartManager:
 
         fig_backtest = None
         try:
-            # iplot=False 옵션을 추가하여 새 창이 뜨는 것을 방지
+            # iplot=False로 창 띄우기 방지
             figures = cerebro.plot(iplot=False, style='candlestick', barup='green', fmt_x_ticks='%Y-%m-%d')
             
             if not figures or not figures[0]:
                 raise ValueError("결과 없음 (거래 미발생 등)")
             else:
-                # 반환된 Figure 객체를 가져옴
                 fig_backtest = figures[0][0]
 
         except Exception as e:
@@ -177,3 +176,7 @@ class ChartManager:
             self.canvas_backtest = FigureCanvas(fig_backtest)
             self.backtest_layout.addWidget(self.canvas_backtest)
             self.canvas_backtest.draw()
+        
+        # canvas_main 상태 보호
+        if self.canvas_main is not None:
+            self.canvas_main.draw()  # 주식 차트 캔버스 갱신
