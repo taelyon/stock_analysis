@@ -1,4 +1,4 @@
-import matplotlib
+﻿import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import mplfinance as mpf
@@ -180,6 +180,29 @@ class ChartManager:
                     horizontalalignment='center', verticalalignment='center', wrap=True)
         
         if fig_backtest:
+            axes = getattr(fig_backtest, 'axes', [])
+            last_row_axes = []
+            for ax in axes:
+                get_spec = getattr(ax, 'get_subplotspec', None)
+                if callable(get_spec):
+                    spec = get_spec()
+                    if spec is not None and spec.is_last_row():
+                        last_row_axes.append(ax)
+                else:
+                    last_row_axes.append(ax)
+            if not last_row_axes and axes:
+                last_row_axes = [axes[-1]]
+
+            for ax in axes:
+                if ax not in last_row_axes:
+                    ax.tick_params(axis='x', labelbottom=False)
+            for ax in last_row_axes:
+                ax.tick_params(axis='x', labelbottom=True)
+                for label in ax.get_xticklabels():
+                    label.set_rotation(0)
+                    label.set_horizontalalignment('center')
+                    label.set_verticalalignment('top')
+
             self.canvas_backtest = FigureCanvas(fig_backtest)
             self.backtest_layout.addWidget(self.canvas_backtest)
             self.canvas_backtest.draw()
@@ -187,3 +210,5 @@ class ChartManager:
         # canvas_main 상태 보호
         if self.canvas_main is not None:
             self.canvas_main.draw()  # 주식 차트 캔버스 갱신
+
+
