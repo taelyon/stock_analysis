@@ -78,6 +78,7 @@ class UIManager(base_class, form_class):
             self.btn_find.clicked.connect(self.find_stock)
             self.le_ent.returnPressed.connect(self.find_stock)
             self.BacktestingButton.clicked.connect(self.run_backtesting)
+            self.lineEdit_stock.returnPressed.connect(self.run_backtesting)
             self.optimize_button.clicked.connect(self.run_portfolio_optimization)
 
             self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
