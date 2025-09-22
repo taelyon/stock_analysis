@@ -1,0 +1,1 @@
+(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])

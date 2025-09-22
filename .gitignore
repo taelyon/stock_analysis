@@ -4,9 +4,6 @@ stock_analysis.spec
 *.pyc
 old/
 .venv/
-files/
-investar.db
-stock_ui.py
 test.py
 stock_analysis_ui.py
 __pycache__/
