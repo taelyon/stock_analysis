@@ -1,6 +1,5 @@
 build/
 dist/
-stock_analysis.spec
 *.pyc
 old/
 .venv/

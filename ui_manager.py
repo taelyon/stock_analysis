@@ -1,5 +1,4 @@
 ﻿from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtUiTools import loadUiType
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings, QWebEngineProfile
 from data_manager import DataManager
@@ -7,13 +6,12 @@ from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
 from backtester import Backtester
 from config_manager import ConfigManager
-from utils import StdoutRedirect
+from utils import StdoutRedirect, resource_path
+from stock_analysis_ui import Ui_MainWindow
 from threading import Thread
 import traceback
 
 # .ui 파일을 로드하여 UI 정의와 기본 클래스를 가져옵니다.
-form_class, base_class = loadUiType("stock_analysis.ui")
-
 # [FIX] JavaScript 콘솔 메시지를 처리하기 위한 사용자 정의 QWebEnginePage 클래스
 class CustomWebEnginePage(QWebEnginePage):
     """JavaScript 콘솔 메시지를 처리하기 위해 QWebEnginePage를 상속받는 클래스."""
@@ -29,7 +27,7 @@ class CustomWebEnginePage(QWebEnginePage):
             self.console_message_handler(level, message, lineNumber, sourceId)
 
 
-class UIManager(base_class, form_class):
+class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
     graphUpdated = QtCore.Signal(str)
     try:
         def __init__(self):

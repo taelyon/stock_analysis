@@ -1,13 +1,16 @@
 import os
 from threading import Lock
+from utils import resource_path
 
 class ConfigManager:
     try:
         def __init__(self, config_dir='files'):
+            if not os.path.isabs(config_dir):
+                config_dir = resource_path(config_dir)
             self.config_dir = config_dir
             self.file_lock = Lock()
             if not os.path.exists(self.config_dir):
-                os.makedirs(self.config_dir)
+                os.makedirs(self.config_dir, exist_ok=True)
 
         def load_condition(self, filename):
             filepath = os.path.join(self.config_dir, filename)

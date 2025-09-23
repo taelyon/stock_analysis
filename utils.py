@@ -1,5 +1,12 @@
+import os
 import sys
+
 from PySide6.QtCore import QObject, Signal
+
+def resource_path(*path_parts):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, *path_parts)
+
 
 class StdoutRedirect(QObject):
     printOccur = Signal(str, name="print")
