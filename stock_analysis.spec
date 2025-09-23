@@ -1,20 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import os
-from PyInstaller.utils.hooks import collect_data_files
-
-project_root = os.path.abspath('.')
-
-extra_datas = [
-    (os.path.join(project_root, 'files'), 'files'),
-    (os.path.join(project_root, 'investar.db'), '.'),
-]
 
 a = Analysis(
     ['stock_analysis.py'],
-    pathex=[project_root],
+    pathex=[],
     binaries=[],
-    datas=extra_datas + collect_data_files('plotly') + collect_data_files('FinanceDataReader'),
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -45,7 +36,6 @@ exe = EXE(
 coll = COLLECT(
     exe,
     a.binaries,
-    a.zipfiles,
     a.datas,
     strip=False,
     upx=True,

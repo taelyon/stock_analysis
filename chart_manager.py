@@ -99,6 +99,12 @@ class ChartManager:
         korean_colors = mpf.make_marketcolors(up='red', down='blue', edge='inherit', wick='black', volume='gray')
         korean_style = mpf.make_mpf_style(base_mpf_style='charles', marketcolors=korean_colors, gridcolor='gray', gridstyle='--', facecolor='white', edgecolor='black')
         mpf.plot(df, type='candle', ax=ax, style=korean_style, show_nontrading=True)
+        envelopes_present = {'ENTOP', 'ENBOTTOM'}.issubset(df.columns)
+        if envelopes_present:
+            ax.plot(df.index, df['ENTOP'], color='dimgray', linestyle='--', alpha=0.8, label='ENTOP')
+            ax.plot(df.index, df['ENBOTTOM'], color='dimgray', linestyle='--', alpha=0.8, label='ENBOTTOM')
+            envelope_mask = (df['ENTOP'] >= df['ENBOTTOM']).fillna(False)
+            ax.fill_between(df.index, df['ENBOTTOM'], df['ENTOP'], where=envelope_mask, color='lightgray', alpha=0.2, interpolate=True)
         
         ax.plot(df.index, df["ema5"], "m", alpha=0.7, label="EMA5")
         ax.plot(df.index, df["ema10"], color="limegreen", alpha=0.7, label="EMA10")
@@ -210,5 +216,6 @@ class ChartManager:
         # canvas_main 상태 보호
         if self.canvas_main is not None:
             self.canvas_main.draw()  # 주식 차트 캔버스 갱신
+
 
 
