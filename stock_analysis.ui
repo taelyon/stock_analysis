@@ -74,7 +74,7 @@
            <x>10</x>
            <y>10</y>
            <width>181</width>
-           <height>123</height>
+           <height>121</height>
           </rect>
          </property>
          <property name="font">
@@ -102,7 +102,7 @@
             <x>10</x>
             <y>20</y>
             <width>164</width>
-            <height>84</height>
+            <height>91</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout">
@@ -210,6 +210,12 @@
                <kerning>true</kerning>
               </font>
              </property>
+             <property name="focusPolicy">
+              <enum>Qt::FocusPolicy::WheelFocus</enum>
+             </property>
+             <property name="cursorMoveStyle">
+              <enum>Qt::CursorMoveStyle::VisualMoveStyle</enum>
+             </property>
             </widget>
            </item>
            <item>
@@ -244,9 +250,9 @@
          <property name="geometry">
           <rect>
            <x>10</x>
-           <y>380</y>
+           <y>390</y>
            <width>181</width>
-           <height>234</height>
+           <height>221</height>
           </rect>
          </property>
          <property name="title">
@@ -258,7 +264,7 @@
             <x>11</x>
             <y>20</y>
             <width>161</width>
-            <height>204</height>
+            <height>191</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -357,7 +363,7 @@
            <x>10</x>
            <y>620</y>
            <width>180</width>
-           <height>231</height>
+           <height>221</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -375,7 +381,7 @@
             <x>11</x>
             <y>20</y>
             <width>161</width>
-            <height>201</height>
+            <height>191</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -472,7 +478,7 @@
          <property name="geometry">
           <rect>
            <x>10</x>
-           <y>860</y>
+           <y>850</y>
            <width>180</width>
            <height>91</height>
           </rect>
@@ -484,8 +490,8 @@
           <property name="geometry">
            <rect>
             <x>9</x>
-            <y>16</y>
-            <width>161</width>
+            <y>20</y>
+            <width>166</width>
             <height>61</height>
            </rect>
           </property>
@@ -598,7 +604,7 @@
          <property name="geometry">
           <rect>
            <x>10</x>
-           <y>137</y>
+           <y>140</y>
            <width>181</width>
            <height>241</height>
           </rect>
@@ -814,12 +820,15 @@
          <property name="geometry">
           <rect>
            <x>-1</x>
-           <y>43</y>
+           <y>51</y>
            <width>1026</width>
-           <height>802</height>
+           <height>808</height>
           </rect>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
+          <property name="spacing">
+           <number>0</number>
+          </property>
           <item>
            <widget class="QLabel" name="imagelabel_3">
             <property name="maximumSize">
@@ -830,6 +839,9 @@
             </property>
             <property name="frameShape">
              <enum>QFrame::Shape::Box</enum>
+            </property>
+            <property name="lineWidth">
+             <number>0</number>
             </property>
             <property name="text">
              <string/>
@@ -847,135 +859,105 @@
           </item>
          </layout>
         </widget>
-        <widget class="QPushButton" name="SearchConditionInputButton_2">
+        <widget class="QWidget" name="horizontalLayoutWidget">
          <property name="geometry">
           <rect>
            <x>0</x>
            <y>10</y>
-           <width>75</width>
-           <height>24</height>
+           <width>1021</width>
+           <height>31</height>
           </rect>
          </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>상승주</string>
-         </property>
-        </widget>
-        <widget class="QLineEdit" name="lineEditSearchCondition">
-         <property name="geometry">
-          <rect>
-           <x>260</x>
-           <y>10</y>
-           <width>601</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-        </widget>
-        <widget class="QRadioButton" name="radioButton">
-         <property name="geometry">
-          <rect>
-           <x>151</x>
-           <y>11</y>
-           <width>50</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>상승</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="SearchConditionInputButton_4">
-         <property name="geometry">
-          <rect>
-           <x>940</x>
-           <y>10</y>
-           <width>75</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>초기화</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="SearchConditionInputButton_3">
-         <property name="geometry">
-          <rect>
-           <x>70</x>
-           <y>10</y>
-           <width>75</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>저가주</string>
-         </property>
-        </widget>
-        <widget class="QPushButton" name="SearchConditionInputButton">
-         <property name="geometry">
-          <rect>
-           <x>870</x>
-           <y>10</y>
-           <width>75</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>입 력</string>
-         </property>
-        </widget>
-        <widget class="QRadioButton" name="radioButton_2">
-         <property name="geometry">
-          <rect>
-           <x>207</x>
-           <y>11</y>
-           <width>50</width>
-           <height>24</height>
-          </rect>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>저가</string>
-         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_12">
+          <item>
+           <widget class="QPushButton" name="SearchConditionInputButton_2">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>상승주</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="SearchConditionInputButton_3">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>저가주</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="radioButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>상승</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="radioButton_2">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>저가</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="lineEditSearchCondition">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="SearchConditionInputButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>입 력</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="SearchConditionInputButton_4">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>초기화</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </widget>
        <widget class="QFrame" name="frame_info">
@@ -1083,7 +1065,7 @@
           <x>101</x>
           <y>85</y>
           <width>1661</width>
-          <height>41</height>
+          <height>31</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_8">
@@ -1143,7 +1125,7 @@
           <x>101</x>
           <y>125</y>
           <width>1661</width>
-          <height>41</height>
+          <height>31</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_9">
@@ -1203,10 +1185,13 @@
           <x>101</x>
           <y>36</y>
           <width>461</width>
-          <height>41</height>
+          <height>31</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_7">
+         <property name="spacing">
+          <number>6</number>
+         </property>
          <item>
           <widget class="QLabel" name="label_3">
            <property name="font">
@@ -1260,7 +1245,7 @@
           <x>640</x>
           <y>35</y>
           <width>1121</width>
-          <height>41</height>
+          <height>31</height>
          </rect>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_10">
