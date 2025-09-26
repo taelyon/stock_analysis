@@ -383,7 +383,7 @@ class MarketDB(DBManager):
         conn, cur = self._get_db_conn()
         if company:
             company_safe = company.replace("'", "''").lower()
-            sql = f"SELECT * FROM comp_info WHERE lower(company) LIKE '%{company_safe}%' or lower(code) = '{company_safe}'"
+            sql = f"SELECT * FROM comp_info WHERE lower(company) = '{company_safe}' or lower(code) = '{company_safe}'"
         else:
             sql = "SELECT * FROM comp_info"
         return pd.read_sql(sql, conn)

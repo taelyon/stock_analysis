@@ -966,7 +966,7 @@
           <x>1220</x>
           <y>0</y>
           <width>691</width>
-          <height>821</height>
+          <height>951</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -981,7 +981,7 @@
            <x>6</x>
            <y>0</y>
            <width>681</width>
-           <height>821</height>
+           <height>951</height>
           </rect>
          </property>
          <property name="url">
@@ -996,7 +996,7 @@
          <rect>
           <x>200</x>
           <y>830</y>
-          <width>1701</width>
+          <width>1021</width>
           <height>121</height>
          </rect>
         </property>
@@ -1005,7 +1005,7 @@
           <rect>
            <x>0</x>
            <y>-1</y>
-           <width>1701</width>
+           <width>1021</width>
            <height>121</height>
           </rect>
          </property>
