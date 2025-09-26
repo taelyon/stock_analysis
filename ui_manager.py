@@ -112,13 +112,33 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
-            self._reset_mobile_profile(rebuild=True) # 이 코드를 추가
+            # ==================== UI 개선 코드 시작 ====================
+            # 사용자 편의성을 위해 Placeholder Text 설정
+            self.ent_stock.setPlaceholderText("종목코드 또는 종목명")
+            self.le_ent.setPlaceholderText("종목코드 또는 종목명 조회")
+            self.lineEdit_stock.setPlaceholderText("백테스팅 할 종목")
+            self.portfolio.setPlaceholderText("쉼표(,)로 종목 구분")
+            self.lineEditSearchCondition.setPlaceholderText("예: (PER < 15) and (PBR < 1)")
+            self.lineEditBuyCondition.setPlaceholderText("예: (c > o) and (v > 100000)")
+            self.lineEditSellCondition.setPlaceholderText("예: (c < o)")
+
+            # `style.qss` 파일 불러와서 스타일시트 적용
+            try:
+                with open(resource_path("style.qss"), "r", encoding="utf-8") as f:
+                    self.setStyleSheet(f.read())
+            except FileNotFoundError:
+                print("스타일시트 파일(style.qss)을 찾을 수 없습니다.")
+            except Exception as e:
+                print(f"스타일시트 로딩 중 오류 발생: {e}")
+            # ===================== UI 개선 코드 끝 ======================
+
+            self._reset_mobile_profile(rebuild=True)
             # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
             settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)  # Optional, as needed
+            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
 
             # 아래 2줄의 그래픽 가속 옵션을 추가합니다.
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
@@ -135,7 +155,7 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.search_condition_text_1 = search_cond1
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
-            self.update_portfolio_textbox() # UI 초기화 시 포트폴리오 텍스트박스 업데이트
+            self.update_portfolio_textbox()
 
         def _create_mobile_profile(self):
             """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""

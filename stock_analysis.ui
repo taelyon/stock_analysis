@@ -525,7 +525,7 @@
                <property name="maximumSize">
                 <size>
                  <width>50</width>
-                 <height>16777215</height>
+                 <height>24</height>
                 </size>
                </property>
                <property name="text">
@@ -550,11 +550,17 @@
                <property name="maximumSize">
                 <size>
                  <width>50</width>
-                 <height>16777215</height>
+                 <height>24</height>
                 </size>
                </property>
                <property name="text">
                 <string>보유</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>16</width>
+                 <height>16</height>
+                </size>
                </property>
               </widget>
              </item>
@@ -569,11 +575,17 @@
                <property name="maximumSize">
                 <size>
                  <width>50</width>
-                 <height>16777215</height>
+                 <height>24</height>
                 </size>
                </property>
                <property name="text">
                 <string>관심</string>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>16</width>
+                 <height>16</height>
+                </size>
                </property>
               </widget>
              </item>
