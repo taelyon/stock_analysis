@@ -795,7 +795,7 @@
           <x>200</x>
           <y>0</y>
           <width>1021</width>
-          <height>881</height>
+          <height>821</height>
          </rect>
         </property>
         <property name="sizePolicy">
@@ -815,8 +815,8 @@
           <rect>
            <x>-1</x>
            <y>43</y>
-           <width>1023</width>
-           <height>781</height>
+           <width>1026</width>
+           <height>802</height>
           </rect>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -824,9 +824,12 @@
            <widget class="QLabel" name="imagelabel_3">
             <property name="maximumSize">
              <size>
-              <width>1100</width>
-              <height>776</height>
+              <width>1020</width>
+              <height>780</height>
              </size>
+            </property>
+            <property name="frameShape">
+             <enum>QFrame::Shape::Box</enum>
             </property>
             <property name="text">
              <string/>

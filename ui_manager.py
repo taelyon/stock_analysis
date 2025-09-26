@@ -6,23 +6,20 @@ from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
 from backtester import Backtester
 from config_manager import ConfigManager
+# ==================== 수정된 코드 시작 ====================
+# resource_path 함수를 import 합니다.
 from utils import StdoutRedirect, resource_path
+# ===================== 수정된 코드 끝 =====================
 from stock_analysis_ui import Ui_MainWindow
 from threading import Thread
 import traceback
 
-# .ui 파일을 로드하여 UI 정의와 기본 클래스를 가져옵니다.
-# [FIX] JavaScript 콘솔 메시지를 처리하기 위한 사용자 정의 QWebEnginePage 클래스
 class CustomWebEnginePage(QWebEnginePage):
-    """JavaScript 콘솔 메시지를 처리하기 위해 QWebEnginePage를 상속받는 클래스."""
     def __init__(self, profile, parent=None):
         super().__init__(profile, parent)
         self.console_message_handler = None
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceId):
-        """
-        메서드를 재정의하여 JavaScript 콘솔 메시지를 외부 핸들러로 전달합니다.
-        """
         if self.console_message_handler:
             self.console_message_handler(level, message, lineNumber, sourceId)
 
@@ -32,7 +29,6 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
     try:
         def __init__(self):
             super().__init__()
-            # setupUi를 호출하여 .ui 파일에 정의된 위젯들을 초기화합니다.
             self.setupUi(self)
 
             self.data_manager = DataManager()
@@ -51,8 +47,8 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.mobile_home_url = QtCore.QUrl("https://m.stock.naver.com/")
 
             self.max_render_failures = 3
-            self.page = None  # page 속성을 None으로 초기화
-            self.mobile_profile = None # mobile_profile 속성을 None으로 초기화
+            self.page = None
+            self.mobile_profile = None
             self.webEngineView.loadFinished.connect(self.handle_load_finished)
 
             self.connect_signals()
@@ -63,6 +59,7 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self._stdout.printOccur.connect(lambda x: self._append_text(x))
 
         def connect_signals(self):
+            # (시그널 연결 코드는 변경 없음)
             self.btn_update1.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "kr"))
             self.btn_update2.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "us"))
             self.btn_update3.clicked.connect(lambda: self.start_thread(self.data_manager.update_stocks, "all"))
@@ -107,13 +104,9 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.btn2.clicked.connect(lambda: self.select_item_in_list(self.lb_hold))
             self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
             self.btn_find.clicked.connect(self.find_stock)
-
-            # 웹페이지 렌더링 프로세스가 비정상 종료되었을 때의 시그널을 연결합니다.
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
-            # ==================== UI 개선 코드 시작 ====================
-            # 사용자 편의성을 위해 Placeholder Text 설정
             self.ent_stock.setPlaceholderText("종목코드 또는 종목명")
             self.le_ent.setPlaceholderText("종목코드 또는 종목명 조회")
             self.lineEdit_stock.setPlaceholderText("백테스팅 할 종목")
@@ -122,25 +115,26 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.lineEditBuyCondition.setPlaceholderText("예: (c > o) and (v > 100000)")
             self.lineEditSellCondition.setPlaceholderText("예: (c < o)")
 
-            # `style.qss` 파일 불러와서 스타일시트 적용
             try:
+                # ==================== 수정된 코드 시작 ====================
+                # 스타일시트 경로도 resource_path를 사용합니다.
                 with open(resource_path("style.qss"), "r", encoding="utf-8") as f:
                     self.setStyleSheet(f.read())
+                # imagelabel_3에 이미지를 동적으로 설정합니다.
+                pixmap = QtGui.QPixmap(resource_path("files/stock market data analysis program.jpg"))
+                self.imagelabel_3.setPixmap(pixmap)
+                # ===================== 수정된 코드 끝 =====================
             except FileNotFoundError:
-                print("스타일시트 파일(style.qss)을 찾을 수 없습니다.")
+                print("스타일시트 또는 이미지 파일을 찾을 수 없습니다.")
             except Exception as e:
-                print(f"스타일시트 로딩 중 오류 발생: {e}")
-            # ===================== UI 개선 코드 끝 ======================
+                print(f"리소스 로딩 중 오류 발생: {e}")
 
             self._reset_mobile_profile(rebuild=True)
-            # QWebEngineView 리소스 최적화 설정
             settings = self.webEngineView.settings()
             settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
-
-            # 아래 2줄의 그래픽 가속 옵션을 추가합니다.
             settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, True)
 
@@ -156,7 +150,8 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.search_condition_text_2 = search_cond2
             self.radioButton.setChecked(True)
             self.update_portfolio_textbox()
-
+        
+        # (이하 나머지 코드는 변경 없음)
         def _create_mobile_profile(self):
             """모바일 페이지 로딩에 최적화된 QWebEngineProfile을 생성합니다."""
             profile = QWebEngineProfile(self)
