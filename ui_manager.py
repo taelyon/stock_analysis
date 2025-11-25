@@ -6,8 +6,6 @@ from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
 from backtester import Backtester
 from config_manager import ConfigManager
-# ==================== 수정된 코드 시작 ====================
-# resource_path 함수를 import 합니다.
 from utils import StdoutRedirect, resource_path
 # ===================== 수정된 코드 끝 =====================
 from stock_analysis_ui import Ui_MainWindow
@@ -86,14 +84,18 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.sellConditionInputButton.clicked.connect(self.save_sell_condition)
             self.sellConditionDefaultButton.clicked.connect(self.save_default_sell_condition)
 
-            self.lb_search.itemClicked.connect(self.stock_list_item_clicked)
-            self.lb_hold.itemClicked.connect(self.stock_list_item_clicked)
-            self.lb_int.itemClicked.connect(self.stock_list_item_clicked)
+            # itemClicked 대신 currentItemChanged를 사용하여 중복 호출을 방지합니다.
+            # 키보드 이동 등에도 반응하여 사용자 경험이 향상됩니다.
+            self.lb_search.currentItemChanged.connect(self.stock_list_item_changed)
+            self.lb_hold.currentItemChanged.connect(self.stock_list_item_changed)
+            self.lb_int.currentItemChanged.connect(self.stock_list_item_changed)
 
-            self.btn_addhold.clicked.connect(lambda: self.add_stock_to_list('hold'))
+            # "종목 조회" 입력 박스 옆의 버튼들은 입력 박스의 텍스트를 사용하도록 수정
+            self.btn_addhold.clicked.connect(lambda: self.add_stock_to_list('hold', self.le_ent.text()))
             self.btn_addhold1.clicked.connect(lambda: self.add_stock_to_list('hold'))
             self.btn_addhold2.clicked.connect(lambda: self.add_stock_to_list('hold'))
-            self.btn_addint.clicked.connect(lambda: self.add_stock_to_list('interest'))
+            # "종목 조회" 입력 박스 옆의 버튼들은 입력 박스의 텍스트를 사용하도록 수정
+            self.btn_addint.clicked.connect(lambda: self.add_stock_to_list('interest', self.le_ent.text()))
             self.btn_addint1.clicked.connect(lambda: self.add_stock_to_list('interest'))
             self.btn_addint2.clicked.connect(lambda: self.add_stock_to_list('interest'))
 
@@ -103,7 +105,6 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.btn.clicked.connect(lambda: self.select_item_in_list(self.lb_search))
             self.btn2.clicked.connect(lambda: self.select_item_in_list(self.lb_hold))
             self.btn3.clicked.connect(lambda: self.select_item_in_list(self.lb_int))
-            self.btn_find.clicked.connect(self.find_stock)
             self.webEngineView.renderProcessTerminated.connect(self.handle_render_process_terminated)
 
         def initialize_ui(self):
@@ -115,6 +116,21 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.lineEditBuyCondition.setPlaceholderText("예: (c > o) and (v > 100000)")
             self.lineEditSellCondition.setPlaceholderText("예: (c < o)")
 
+            # [FIX] UI에 남아있는 한국투자증권 위젯을 숨깁니다.
+            if hasattr(self, 'groupBox_kis'):
+                self.groupBox_kis.hide()
+
+            # [FIX] 리스트 박스 높이를 줄입니다.
+            self.lb_search.setMaximumHeight(150)
+            self.lb_hold.setMaximumHeight(150)
+            self.lb_int.setMaximumHeight(150)
+
+            # [FIX] 리스트 박스 아이템 간격을 줄입니다.
+            list_box_style = "QListWidget::item { padding-top: 0px; padding-bottom: 0px; }"
+            self.lb_search.setStyleSheet(list_box_style)
+            self.lb_hold.setStyleSheet(list_box_style)
+            self.lb_int.setStyleSheet(list_box_style)
+            
             try:
                 # ==================== 수정된 코드 시작 ====================
                 # 스타일시트 경로도 resource_path를 사용합니다.
@@ -234,18 +250,40 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
         def find_stock(self):
             company = self.le_ent.text()
 
-            if not company.strip():
+            company_strip = company.strip()
+            if not company_strip:
                 print("조회할 종목명을 입력해주세요.")
                 return
 
-            df = self.data_manager.get_daily_price(company)
+            # 먼저 DB에서 종목 정보를 조회하여 정식 명칭을 얻습니다.
+            _, _, _, formal_name = self.data_manager.get_stock_info(company_strip)
+            search_term = formal_name if formal_name else company_strip
 
+            # 모든 리스트를 순회하며 정식 명칭 또는 입력된 이름으로 종목을 찾습니다.
+            for list_widget in [self.lb_search, self.lb_hold, self.lb_int]:
+                # 더 정확한 검색을 위해 MatchStartsWith 사용
+                items = list_widget.findItems(search_term, QtCore.Qt.MatchFlag.MatchStartsWith)
+                if items:
+                    # 찾은 첫 번째 아이템을 현재 아이템으로 설정합니다.
+                    # 이렇게 하면 currentItemChanged 시그널이 발생하여 stock_list_item_changed가 호출됩니다.
+                    list_widget.setCurrentItem(items[0])
+                    return # 종목을 찾았으므로 함수 종료
+            
+            # 리스트에 종목이 없는 경우, 새로 조회합니다.
+            # DB에 정보가 있었다면 "리스트에 없어 새로 조회" 메시지는 더 이상 나타나지 않습니다.
+            if not formal_name:
+                print(f"리스트와 DB에 '{company_strip}'이(가) 없어 새로 조회합니다.")
+
+            # stock_list_item_changed를 직접 호출하는 대신, 차트 그리기와 정보 표시 로직을 직접 실행하여 중복 호출을 방지합니다.
+            df = self.data_manager.get_daily_price(company_strip)
             if df is not None and not df.empty:
-                self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
+                self.chart_manager.plot_stock_chart(df, company_strip, self.search_condition_text_1, self.search_condition_text_2)
+            else:
+                print(f"'{company_strip}'의 차트 데이터를 찾을 수 없어 빈 차트를 표시합니다.")
+                self.chart_manager.plot_stock_chart(None, company_strip, "", "")
 
-            self.show_stock_info(company)
-            self.current_searched_stock = company
-
+            self.show_stock_info(company_strip)
+            self.current_searched_stock = company_strip
         def run_backtesting(self):
             company = self.lineEdit_stock.text()
             start_date = self.dateEdit_start.date().toString("yyyy-MM-dd")
@@ -351,28 +389,41 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.lineEditSellCondition.setText(self.config_manager.save_default_sell_condition())
             print("기본 매도 조건 저장 완료")
 
-        def stock_list_item_clicked(self, item):
-            source_list = item.listWidget()
+        def stock_list_item_changed(self, current_item, previous_item):
+            """리스트 위젯에서 선택된 아이템이 변경되었을 때 호출됩니다."""
+            if not current_item:
+                return
 
-            for list_widget in [self.lb_search, self.lb_hold, self.lb_int]:
-                if list_widget is not source_list:
-                    list_widget.clearSelection()
+            # current_item이 QListWidgetItem인 경우 (리스트 클릭)와 str인 경우 (직접 호출)를 모두 처리합니다.
+            if isinstance(current_item, QtWidgets.QListWidgetItem):
+                company = current_item.text()
+                source_list = current_item.listWidget()
 
-            company = item.text()
+                # 다른 리스트 위젯의 선택을 해제합니다.
+                for list_widget in [self.lb_search, self.lb_hold, self.lb_int]:
+                    if list_widget is not source_list:
+                        # selectionChanged 시그널이 재귀적으로 호출되는 것을 막기 위해 블로킹합니다.
+                        list_widget.blockSignals(True)
+                        list_widget.clearSelection()
+                        list_widget.blockSignals(False)
+            else: # current_item이 str인 경우
+                company = str(current_item)
+
             try:
                 df = self.data_manager.get_daily_price(company)
 
                 if df is not None and not df.empty:
                     self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
                 else:
-                    print(f"'{company}'의 차트 데이터를 가져올 수 없습니다.")
+                    # 차트 데이터가 없을 때도 로그를 남깁니다.
+                    print(f"'{company}'의 차트 데이터를 찾을 수 없어 빈 차트를 표시합니다.")
                     self.chart_manager.plot_stock_chart(None, company, "", "")
 
                 self.show_stock_info(company)
                 self.current_searched_stock = company
 
             except Exception as e:
-                print(f"종목 '{company}' 클릭 처리 중 오류 발생: {e}")
+                print(f"종목 '{company}' 처리 중 오류 발생: {e}")
 
         def show_stock_info(self, company):
             # get_stock_info가 market, formal_name 정보도 반환하도록 수정
@@ -442,11 +493,16 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
             self.lb_hold.addItems(hold_stocks)
             self.lb_int.addItems(interest_stocks)
 
-        def add_stock_to_list(self, list_type):
+        def add_stock_to_list(self, list_type, company_name=None):
             target_list = self.lb_hold if list_type == 'hold' else self.lb_int
             filename = f'stock_{list_type}.txt'
 
-            company_to_add = self.current_searched_stock
+            # company_name이 제공되지 않으면, 현재 선택된 종목을 사용합니다.
+            # 이는 "종목 조회" 입력 박스 옆의 버튼이 아닌 다른 버튼들의 동작을 유지합니다.
+            if company_name is None:
+                company_name = self.current_searched_stock
+            
+            company_to_add = company_name.strip() if company_name else None
 
             if company_to_add:
                 if not target_list.findItems(company_to_add, QtCore.Qt.MatchFlag.MatchExactly):
@@ -485,10 +541,13 @@ class UIManager(QtWidgets.QMainWindow, Ui_MainWindow):
 
         def select_item_in_list(self, target_list_widget):
             selected_item = target_list_widget.currentItem()
-            if selected_item:
-                self.stock_list_item_clicked(selected_item)
-            else:
+            if not selected_item:
                 print(f"리스트에서 선택된 종목이 없습니다.")
+                return
+            
+            # currentItemChanged 시그널 핸들러를 직접 호출합니다.
+            # 첫 번째 인자는 QListWidgetItem 또는 str, 두 번째는 이전 아이템입니다.
+            self.stock_list_item_changed(selected_item, None)
 
         def update_portfolio_textbox(self):
             """보유 종목 리스트(lb_hold)의 내용을 포트폴리오 텍스트박스(portfolio)에 업데이트합니다."""

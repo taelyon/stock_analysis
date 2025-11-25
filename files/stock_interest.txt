@@ -1,6 +1,6 @@
 삼성전자
-Apple Inc
 META
 GOOG
 IONQ
 Microsoft
+AAPL

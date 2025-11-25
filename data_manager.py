@@ -3,6 +3,12 @@ import DBUpdater_new
 from threading import Lock
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
+import yfinance as yf
+import logging
+
+# yfinance 라이브러리가 생성하는 INFO, WARNING 수준의 로그를 비활성화합니다.
+# 이렇게 하면 'possibly delisted'와 같은 메시지가 콘솔에 나타나지 않습니다.
+logging.getLogger('yfinance').setLevel(logging.ERROR)
 
 class DataManager:
     def __init__(self):
@@ -31,9 +37,14 @@ class DataManager:
                     if code_col not in df_stocks.columns or 'Name' not in df_stocks.columns:
                         continue
                     
+                    # BF.B -> BF-B 와 같은 티커 변환을 고려하여 검색 조건 추가
+                    search_name = company.lower()
+                    search_name_alt = search_name.replace('.', '-')
+
                     stock = df_stocks[
-                        (df_stocks[code_col].str.lower() == company.lower()) |
-                        (df_stocks['Name'].str.lower() == company.lower())
+                        (df_stocks[code_col].str.lower() == search_name) |
+                        (df_stocks[code_col].str.lower() == search_name_alt) |
+                        (df_stocks['Name'].str.lower() == search_name)
                     ]
                     
                     if not stock.empty:
@@ -49,7 +60,7 @@ class DataManager:
                                 "INSERT OR IGNORE INTO comp_info (code, company, country, market) VALUES (?, ?, ?, ?)",
                                 (code, name, country, market_name)
                             )
-                        print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.")
+                        # print(f"'{name}'({code}) 정보를 로컬 DB에 성공적으로 추가했습니다.") # UI 피드백과 중복되므로 로그 제거
                         
                         self.db_updater.update_single_stock_all_data(name)
                         # 정식 회사명(name)을 함께 반환하도록 수정
@@ -61,27 +72,33 @@ class DataManager:
                 print(f"인터넷에서 종목 정보 조회 중 오류 발생: {e}")
                 return None, None, None, None
 
-    def update_recent_stock_data(self, code):
+    def update_recent_stock_data(self, code, country):
         """특정 종목의 최신 시세 데이터를 DB에 덮어쓰기하여 업데이트합니다."""
         try:
-            start_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d')
-            df_new = fdr.DataReader(code, start_date)
+            df_new = None
+            if country == 'kr':
+                # 국내 주식은 네이버 API를 사용합니다.
+                df_new = self.db_updater.read_naver_api(code, "")
+                if df_new is not None and not df_new.empty:
+                    df_new.set_index('date', inplace=True)
+            elif country == 'us':
+                # 미국 주식은 yfinance를 사용합니다.
+                df_new = self.db_updater.read_yfinance(code, period=1) # period=1은 최신 20일 데이터를 의미합니다.
+                if df_new is not None and not df_new.empty:
+                    # yfinance가 반환하는 대문자 컬럼명을 소문자로 변경합니다.
+                    if isinstance(df_new.columns, pd.MultiIndex):
+                        df_new.columns = df_new.columns.get_level_values(0)
+                    df_new = df_new.loc[:, ~df_new.columns.duplicated(keep='first')]
+                    df_new = df_new[['Open', 'High', 'Low', 'Close', 'Volume']]
+                    df_new.columns = ['open', 'high', 'low', 'close', 'volume']
 
-            if df_new.empty:
+            if df_new is None or df_new.empty:
                 print(f"'{code}'에 대한 새로운 시세 데이터가 없습니다.")
                 return
 
-            conn, cur = self.market_db._get_db_conn()
-            with conn:
-                for index, row in df_new.iterrows():
-                    date_str = index.strftime('%Y-%m-%d')
-                    cur.execute(
-                        """
-                        REPLACE INTO daily_price (code, date, open, high, low, close, volume)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (code, date_str, row['Open'], row['High'], row['Low'], row['Close'], row['Volume'])
-                    )
+            # DBUpdater의 replace_into_db를 사용하여 DB에 저장합니다.
+            self.db_updater.replace_into_db(df_new, code)
+
         except Exception as e:
             print(f"'{code}'의 최신 시세 업데이트 중 오류 발생: {e}")
 
@@ -91,13 +108,13 @@ class DataManager:
         start_date가 없으면 차트용(최신 업데이트 + 3개월 조회), 있으면 해당 날짜부터 조회합니다.
         """
         # get_stock_info 반환값이 4개로 변경됨 (정식 종목명 추가)
-        code, _, _, _ = self.get_stock_info(company)
+        code, country, _, _ = self.get_stock_info(company)
         if code is None:
             return None
 
         # 차트 조회를 위한 로직
         if start_date is None:
-            self.update_recent_stock_data(code)
+            self.update_recent_stock_data(code, country)
             fetch_start_date = (datetime.now() - timedelta(days=220)).strftime('%Y-%m-%d')
             with self.db_lock:
                 df = self.market_db.get_daily_price(code, fetch_start_date)

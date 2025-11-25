@@ -5,7 +5,10 @@ a = Analysis(
     ['stock_analysis.py'],
     pathex=[],
     binaries=[],
-    datas=[('files', 'files'), ('style.qss', '.'), ('.venv/Lib/site-packages/plotly/validators', 'plotly/validators'), ('.venv/Lib/site-packages/plotly/package_data', 'plotly/package_data')],
+    datas=[
+        ('files', 'files'),
+        ('style.qss', '.')
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
