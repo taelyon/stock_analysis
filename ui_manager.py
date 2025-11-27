@@ -245,11 +245,64 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if df is not None and not df.empty:
                 self.chart_manager.plot_stock_chart(df, company, self.search_condition_text_1, self.search_condition_text_2)
                 print(f"'{company}' 차트를 표시했습니다.")
+                
+                # 웹 페이지 업데이트
+                self.update_web_view(company)
             else:
                 print(f"'{company}'의 데이터를 찾을 수 없습니다.")
                 
         except Exception as e:
             print(f"오류 발생: {str(e)}")
+
+    def update_web_view(self, company):
+        """종목에 맞는 네이버 금융 페이지를 웹뷰에 표시합니다."""
+        try:
+            print(f"웹뷰 업데이트 요청: {company}")
+            mk = DBUpdater_new.MarketDB()
+            stock_list = mk.get_comp_info(company)
+            
+            if stock_list.empty:
+                if ',' in company:
+                    simple_company = company.split(',')[0].strip()
+                    stock_list = mk.get_comp_info(simple_company)
+            
+            if stock_list.empty:
+                # 검색 실패 시 검색 페이지로 이동
+                url = f"https://m.stock.naver.com/search/index.html?keyword={company}"
+                print(f"웹뷰: 종목 정보 없음. 검색 페이지로 이동: {url}")
+            else:
+                # 정확한 일치가 없으면 첫 번째 결과 사용
+                val = stock_list[(stock_list['company'] == company) | (stock_list['code'] == company)]
+                if val.empty:
+                    val = stock_list.iloc[[0]]
+                
+                code = val.iloc[0]['code']
+                country = val.iloc[0]['country']
+                market = val.iloc[0]['market']
+                
+                print(f"웹뷰 타겟: {company} (Code: {code}, Country: {country}, Market: {market})")
+
+                if country == 'kr':
+                    # 네이버 모바일 국내 증권 페이지
+                    url = f"https://m.stock.naver.com/domestic/stock/{code}/total"
+                elif country == 'us':
+                    # 거래소별 접미사 매핑
+                    suffix = '.O' # Default to NASDAQ/Other
+                    if market == 'NYSE':
+                        suffix = '.N'
+                    elif market == 'AMEX':
+                        suffix = '.A'
+                    
+                    url = f"https://m.stock.naver.com/worldstock/stock/{code}{suffix}/total"
+                else:
+                    url = f"https://m.stock.naver.com/search/index.html?keyword={company}"
+            
+            print(f"웹뷰 URL 설정: {url}")
+            if hasattr(self, 'webEngineView'):
+                self.webEngineView.setUrl(QtCore.QUrl(url))
+                
+        except Exception as e:
+            print(f"웹뷰 업데이트 오류: {str(e)}")
 
     def update_stock_price(self, company, period):
         try:
