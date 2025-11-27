@@ -288,7 +288,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 elif country == 'us':
                     # 거래소별 접미사 매핑
                     suffix = '.O' # Default to NASDAQ/Other
-                    if market == 'NYSE':
+                    
+                    # 예외 케이스 처리
+                    if code == 'IONQ':
+                        suffix = '.K'
+                    elif market == 'NYSE':
                         suffix = '.N'
                     elif market == 'AMEX':
                         suffix = '.A'
