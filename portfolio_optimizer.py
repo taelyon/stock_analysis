@@ -85,21 +85,57 @@ class PortfolioOptimizer:
             self.text_browser.clear()
             self.text_browser.setHtml(
                 self.format_html_output(max_sharpe, 'Max Sharpe Ratio') +
-                '<br><br>' +
                 self.format_html_output(min_risk, 'Min Risk')
             )
             self.plot_portfolio(df_port, max_sharpe, min_risk)
 
         def format_html_output(self, df, title):
-            df_percent = df.copy()
-            for col in df_percent.columns:
-                if col not in ['Returns', 'Risk', 'Sharpe']:
-                    df_percent[col] = df_percent[col].apply(lambda x: f"{x * 100:.2f}%")
-                elif col == 'Returns':
-                    df_percent[col] = f"{df_percent[col].iloc[0] * 100:.2f}%"
-            df_percent['Risk'] = df_percent['Risk'].round(3)
-            df_percent['Sharpe'] = df_percent['Sharpe'].round(3)
-            return f'<b>{title}:</b>' + df_percent.to_html(index=False, border=0)
+            if df.empty:
+                return f"<b>{title}:</b> No Data"
+                
+            row = df.iloc[0]
+            
+            html = f"<h3 style='color: #ffffff; margin-bottom: 5px;'>{title}</h3>"
+            html += "<table style='border-collapse: collapse; width: 100%; border: 1px solid #555; font-size: 12px; color: #ffffff; background-color: #333333;'>"
+            
+            # Header Row
+            html += "<tr style='background-color: #444444; color: #ffffff;'>"
+            metrics = ['Returns', 'Risk', 'Sharpe']
+            
+            # Metrics Headers
+            for metric in metrics:
+                if metric in row.index:
+                    html += f"<th style='border: 1px solid #555; padding: 6px; text-align: center;'>{metric}</th>"
+            
+            # Stock Headers
+            for idx in row.index:
+                if idx not in metrics:
+                    html += f"<th style='border: 1px solid #555; padding: 6px; text-align: center;'>{idx}</th>"
+            html += "</tr>"
+            
+            # Value Row
+            html += "<tr>"
+            
+            # Metrics Values
+            for metric in metrics:
+                if metric in row.index:
+                    val = row[metric]
+                    if metric == 'Returns':
+                        val_str = f"{val * 100:.2f}%"
+                    else:
+                        val_str = f"{val:.4f}"
+                    html += f"<td style='border: 1px solid #555; padding: 6px; text-align: center; color: #ffffff;'>{val_str}</td>"
+            
+            # Stock Values
+            for idx in row.index:
+                if idx not in metrics:
+                    val = row[idx]
+                    val_str = f"{val * 100:.2f}%"
+                    html += f"<td style='border: 1px solid #555; padding: 6px; text-align: center; color: #ffffff;'>{val_str}</td>"
+            html += "</tr>"
+            
+            html += "</table>"
+            return html
 
         def plot_portfolio(self, df_port, max_sharpe, min_risk):
             while self.layout.count():

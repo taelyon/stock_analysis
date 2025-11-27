@@ -406,6 +406,201 @@ class DBUpdater(DBManager):
         else:
             print(f"'{company}' ({code})의 데이터를 가져오는 데 실패했습니다.")
 
+        for col in ['close', 'open', 'high', 'low', 'volume']:
+            clean_str = df[col].astype(str).str.replace(',', '')
+            numeric_val = pd.to_numeric(clean_str, errors='coerce').fillna(0)
+            df[col] = numeric_val.astype(int)
+
+        df['date'] = pd.to_datetime(df['date'])
+        df = df[df['date'] >= datetime(2024,1,1)]
+        df = df.sort_values(by='date', ascending=True)
+        return df
+
+    def _read_naver_page(self, code, page, retries=3):
+        url = f"https://finance.naver.com/item/sise_day.nhn?code={code}&page={page}"
+        headers = {'User-agent': 'Mozilla/5.0'}
+        for i in range(retries):
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                
+                tables = pd.read_html(response.text, header=0)
+                if not tables or tables[0].empty:
+                    return None
+
+                page_df = tables[0]
+                page_df.dropna(inplace=True)
+                return page_df if not page_df.empty else None
+
+            except Exception:
+                time.sleep(0.5)
+        return None
+
+    def read_naver_api(self, code, company):
+        """네이버 금융 API를 직접 호출하여 시세 데이터를 빠르게 가져옵니다."""
+        try:
+            # 2024년 이후 데이터는 약 250거래일 미만이므로 count=3000은 충분한 값입니다.
+            url = f"https://api.finance.naver.com/siseJson.naver?symbol={code}&requestType=1&startTime=20240101&endTime=20991231&timeframe=day&count=3000"
+            headers = {'User-agent': 'Mozilla/5.0'}
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            
+            # 첫 줄의 불필요한 문자열 제거 후 JSON 파싱
+            data = response.text.strip().replace("'", '"').replace("(", "").replace(")", "")
+            data = re.sub(r'([a-zA-Z_]+):', r'"\1":', data) # 키 값을 쌍따옴표로 감싸기
+            
+            parsed_data = json.loads(data)
+            
+            df = pd.DataFrame(parsed_data[1:], columns=parsed_data[0])
+            df = df.rename(columns={'날짜': 'date', '시가': 'open', '고가': 'high', '저가': 'low', '종가': 'close', '거래량': 'volume'})
+            
+            df['date'] = pd.to_datetime(df['date'])
+            numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            df.dropna(subset=numeric_cols, inplace=True)
+            df = df.sort_values(by='date', ascending=True).reset_index(drop=True)
+            return df
+        except Exception as e:
+            print(f"[{code}] 네이버 API 호출 중 오류: {e}")
+            return None
+
+    def read_yfinance(self, code, period=2):
+        end_date = datetime.today() + timedelta(days=1)
+        if period == 1:
+            start_date = end_date - timedelta(days=20)
+        else:
+            start_date = datetime(2024, 1, 1)
+
+        return self._download_yfinance_data(code, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+
+    def _download_yfinance_data(self, code, start, end):
+        """yfinance를 사용하여 데이터를 다운로드하고, 실패 시 티커를 변경하여 재시도합니다."""
+        # 첫 번째 시도
+        try:
+            ticker = yf.Ticker(code)
+            df = ticker.history(start=start, end=end, auto_adjust=False)
+            if not df.empty:
+                return df
+        except Exception as e:
+            # yfinance 내부 오류는 무시하고 재시도 로직으로 넘어갑니다.
+            pass
+
+        # 티커 변경 후 재시도 (예: BRK.B -> BRK-B)
+        try:
+            code_alt = code.replace('.', '-')
+            ticker_alt = yf.Ticker(code_alt)
+            df_alt = ticker_alt.history(start=start, end=end, auto_adjust=False)
+            return df_alt if not df_alt.empty else None
+        except Exception as e:
+            return None
+
+    def replace_into_db(self, df, code):
+        conn, cur = self._get_db_conn()
+        if 'diff' not in df.columns:
+            df['diff'] = df['close'].diff().fillna(0)
+            
+        try:
+            df['open'] = df['open'].astype(float)
+            df['high'] = df['high'].astype(float)
+            df['low'] = df['low'].astype(float)
+            df['close'] = df['close'].astype(float)
+            df['diff'] = df['diff'].astype(float)
+            df['volume'] = df['volume'].astype(int)
+        except Exception as e:
+            print(f"[{code}] 데이터 타입 변환 중 오류: {e}")
+            return
+
+        for r in df.itertuples():
+            date_str = r.Index.strftime('%Y-%m-%d')
+            sql = (f"REPLACE INTO daily_price (code, date, open, high, low, close, diff, volume) "
+                   f"VALUES ('{code}', '{date_str}', '{r.open}', '{r.high}', '{r.low}', '{r.close}', '{r.diff}', '{r.volume}')")
+            try:
+                cur.execute(sql)
+            except sqlite3.Error as e:
+                print(f"[{code}] DB 저장 중 오류: {e}")
+                # 오류 발생 시 롤백하고 함수를 종료할 수 있습니다.
+                # conn.rollback()
+                return
+        conn.commit()
+
+    def update_daily_price_by_code(self, code, country, period=2):
+        """code와 country를 사용하여 특정 종목의 일별 시세를 업데이트합니다."""
+        df = None
+        if country == 'kr':
+            # 전체 업데이트 시에도 빠른 API 방식을 사용하도록 수정
+            df = self.read_naver_api(code, "")
+            if df is not None and not df.empty:
+                df.set_index('date', inplace=True)
+        elif country == 'us':
+            df = self.read_yfinance(code, period=period)
+            if df is not None and not df.empty:
+                # yfinance가 MultiIndex 컬럼을 반환하는 경우, 단일 레벨로 평탄화합니다.
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+
+                # yfinance가 중복된 열을 반환하는 경우를 대비해, 중복을 먼저 제거합니다.
+                df = df.loc[:, ~df.columns.duplicated(keep='first')]
+                # yfinance가 MultiIndex를 반환하는 경우를 대비하고, 필요한 열만 선택하여 표준화합니다.
+                df = df[['Open', 'High', 'Low', 'Close', 'Volume']] 
+                df.columns = ['open', 'high', 'low', 'close', 'volume']
+
+        if df is not None and not df.empty:
+            self.replace_into_db(df, code)
+            return f"[{code}] ({country}) 업데이트 완료."
+        else:
+            return f"[{code}] ({country}) 데이터 없음. 업데이트 실패."
+
+    def update_daily_price(self, nation='all', period=1):
+        if nation == 'stop':
+            self.run_update = False
+            return
+        self.run_update = True
+
+        conn, cur = self._get_db_conn()
+        cur.execute("SELECT code, country FROM comp_info")
+        stocks = [(code, country) for code, country in cur.fetchall() if nation == 'all' or nation == country]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # 각 종목에 대한 업데이트 작업을 스레드 풀에 제출하고 future 객체 리스트를 생성합니다.
+            futures = [executor.submit(self.update_daily_price_by_code, code, country, period) for code, country in stocks]
+            
+            # 작업이 완료되는 순서대로 결과를 처리하고 진행 상황을 출력합니다.
+            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                result = future.result()
+                print(f"({i}/{len(stocks)}) {result}")
+
+        print("\n모든 일별 시세 업데이트가 완료되었습니다.")
+    
+    def update_single_stock_all_data(self, company):
+        mdb = MarketDB()
+        comp_info = mdb.get_comp_info(company)
+        
+        if comp_info.empty:
+            print(f"'{company}' 종목을 찾을 수 없습니다. 종목 목록을 먼저 업데이트 해주세요.")
+            return
+
+        code = comp_info.iloc[0]['code']
+        country = comp_info.iloc[0]['country']
+        
+        df = None
+        if country == 'kr':
+            # 네이버 금융 API를 직접 호출하여 빠르게 데이터를 가져옵니다.
+            df = self.read_naver_api(code, company)
+            if df is not None and not df.empty:
+                df.set_index('date', inplace=True)
+        elif country == 'us':
+            df = self.read_yfinance(code, period=2)
+            if df is not None and not df.empty:
+                df.columns = [col[0].lower() if isinstance(col, tuple) else col.lower() for col in df.columns]
+
+        if df is not None and not df.empty:
+            self.replace_into_db(df, code)
+            print(f"'{company}' ({code})의 업데이트를 완료했습니다.")
+        else:
+            print(f"'{company}' ({code})의 데이터를 가져오는 데 실패했습니다.")
+
     def run_default_reset(self):
         self.init_db('comp_info')
         self.create_tables(*self._get_db_conn())
@@ -421,7 +616,15 @@ class MarketDB(DBManager):
         conn, cur = self._get_db_conn()
         if company:
             company_safe = company.replace("'", "''").lower()
+            # 1. 정확한 일치 검색
             sql = f"SELECT * FROM comp_info WHERE lower(company) = '{company_safe}' or lower(code) = '{company_safe}'"
+            df = pd.read_sql(sql, conn)
+            
+            # 2. 결과가 없으면 부분 일치 검색 (LIKE)
+            if df.empty:
+                sql = f"SELECT * FROM comp_info WHERE lower(company) LIKE '%{company_safe}%' or lower(code) LIKE '%{company_safe}%'"
+                df = pd.read_sql(sql, conn)
+            return df
         else:
             sql = "SELECT * FROM comp_info"
         return pd.read_sql(sql, conn)

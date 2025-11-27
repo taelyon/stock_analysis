@@ -1,0 +1,11 @@
+finance-datareader
+pandas
+beautifulsoup4
+requests
+yfinance
+exchange_calendars
+lxml
+PySide6
+matplotlib
+mplfinance
+backtrader

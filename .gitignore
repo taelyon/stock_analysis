@@ -6,3 +6,4 @@ old/
 test.py
 stock_analysis_ui.py
 __pycache__/
+investar.db
