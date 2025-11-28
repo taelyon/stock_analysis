@@ -6,7 +6,7 @@ import pandas as pd
 import DBUpdater_new
 
 from PySide6 import QtCore, QtWidgets, QtGui
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
 from stock_analysis_ui import Ui_MainWindow
 from data_manager import DataManager
 from chart_manager import ChartManager
@@ -195,38 +195,97 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setup_treemap_tab()
 
     def setup_treemap_tab(self):
-        """트리맵 탭과 위젯을 동적으로 생성합니다."""
+        """트리맵 탭과 위젯을 설정합니다 (기존 UI 활용 또는 동적 생성)."""
         if not hasattr(self, 'tabWidget'):
             return
 
-        # 이미 탭이 있는지 확인 (이름으로 체크)
+        treemap_tab_index = -1
         for i in range(self.tabWidget.count()):
             if self.tabWidget.tabText(i) == "트리맵":
-                return
+                treemap_tab_index = i
+                break
 
-        # 탭 위젯 생성
-        self.tab_3 = QtWidgets.QWidget()
-        self.tab_3.setObjectName("tab_3")
-        
-        # 레이아웃 생성
-        layout = QtWidgets.QVBoxLayout(self.tab_3)
-        
-        # 컨트롤 영역 (새로고침 버튼 등)
-        control_layout = QtWidgets.QHBoxLayout()
-        self.btn_treemap_refresh = QtWidgets.QPushButton("새로고침")
-        self.btn_treemap_refresh.clicked.connect(self.load_treemap)
-        control_layout.addWidget(self.btn_treemap_refresh)
-        control_layout.addStretch()
-        layout.addLayout(control_layout)
-        
-        # 웹뷰 생성
-        self.webEngineViewTreemap = QWebEngineView()
-        self.webEngineViewTreemap.setUrl(QtCore.QUrl("about:blank"))
-        layout.addWidget(self.webEngineViewTreemap)
-        
-        # 탭 추가
-        self.tabWidget.addTab(self.tab_3, "트리맵")
-        print("트리맵 탭이 추가되었습니다.")
+        if treemap_tab_index != -1:
+            # 1. 이미 탭이 존재하는 경우 (UI 파일에서 로드됨)
+            self.tab_3 = self.tabWidget.widget(treemap_tab_index)
+            print("기존 트리맵 탭을 찾았습니다.")
+            
+            # 웹뷰 설정
+            if hasattr(self, 'webEngineViewTreemap'):
+                pass # 이미 UI 파일에서 로드됨
+            else:
+                # 혹시라도 없으면 찾기 시도
+                self.webEngineViewTreemap = self.tab_3.findChild(QWebEngineView, "webEngineViewTreemap")
+
+            # 버튼 컨트롤 레이아웃 추가
+            # 기존 레이아웃 찾기 (UI 파일의 verticalLayout_8)
+            target_layout = None
+            if hasattr(self, 'verticalLayout_8'):
+                target_layout = self.verticalLayout_8
+            else:
+                # 이름으로 찾기 시도
+                target_layout = self.tab_3.findChild(QtWidgets.QVBoxLayout, "verticalLayout_8")
+                
+                # 그래도 없으면 verticalLayoutWidget을 통해 접근
+                if not target_layout:
+                    v_widget = self.tab_3.findChild(QtWidgets.QWidget, "verticalLayoutWidget")
+                    if v_widget:
+                        target_layout = v_widget.layout()
+            
+            if target_layout:
+                # 이미 버튼이 추가되었는지 확인 (버튼 객체 존재 여부로 판단)
+                if not hasattr(self, 'btn_treemap_finviz'):
+                    # 컨트롤 레이아웃 생성
+                    control_layout = QtWidgets.QHBoxLayout()
+                    
+                    self.btn_treemap_refresh = QtWidgets.QPushButton("국내 증시 (새로고침)")
+                    self.btn_treemap_refresh.clicked.connect(self.load_treemap)
+                    control_layout.addWidget(self.btn_treemap_refresh)
+                    
+                    self.btn_treemap_finviz = QtWidgets.QPushButton("미국 증시 (Finviz)")
+                    self.btn_treemap_finviz.clicked.connect(self.load_finviz_treemap)
+                    control_layout.addWidget(self.btn_treemap_finviz)
+                    
+                    control_layout.addStretch()
+                    
+                    # 레이아웃의 맨 위에 삽입
+                    target_layout.insertLayout(0, control_layout)
+                    print("트리맵 컨트롤 버튼이 추가되었습니다.")
+            else:
+                print("트리맵 레이아웃(verticalLayout_8)을 찾을 수 없습니다.")
+
+        else:
+            # 2. 탭이 없는 경우 (동적 생성)
+            self.tab_3 = QtWidgets.QWidget()
+            self.tab_3.setObjectName("tab_3")
+            
+            layout = QtWidgets.QVBoxLayout(self.tab_3)
+            
+            control_layout = QtWidgets.QHBoxLayout()
+            
+            self.btn_treemap_refresh = QtWidgets.QPushButton("국내 증시 (새로고침)")
+            self.btn_treemap_refresh.clicked.connect(self.load_treemap)
+            control_layout.addWidget(self.btn_treemap_refresh)
+            
+            self.btn_treemap_finviz = QtWidgets.QPushButton("미국 증시 (Finviz)")
+            self.btn_treemap_finviz.clicked.connect(self.load_finviz_treemap)
+            control_layout.addWidget(self.btn_treemap_finviz)
+            
+            control_layout.addStretch()
+            layout.addLayout(control_layout)
+            
+            self.webEngineViewTreemap = QWebEngineView()
+            layout.addWidget(self.webEngineViewTreemap)
+            
+            self.tabWidget.addTab(self.tab_3, "트리맵")
+            print("트리맵 탭이 동적으로 추가되었습니다.")
+
+        # 공통: User-Agent 설정
+        if hasattr(self, 'webEngineViewTreemap') and self.webEngineViewTreemap:
+            profile = QWebEngineProfile.defaultProfile()
+            profile.setHttpUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            if self.webEngineViewTreemap.url().toString() == "about:blank" or self.webEngineViewTreemap.url().isEmpty():
+                 self.webEngineViewTreemap.setUrl(QtCore.QUrl("about:blank"))
 
     def load_search_conditions(self):
         """종목 탐색 조건을 파일에서 불러옵니다."""
@@ -933,11 +992,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         current_tab_text = self.tabWidget.tabText(index)
         if current_tab_text == "트리맵":
             self.load_treemap()
-
     def load_treemap(self):
         """트리맵을 생성하고 웹뷰에 표시합니다."""
         print("트리맵 생성 중...")
         try:
+            # Finviz 로드 핸들러가 연결되어 있다면 해제 (로그 스팸 방지)
+            if hasattr(self, 'webEngineViewTreemap'):
+                try:
+                    self.webEngineViewTreemap.loadFinished.disconnect(self.on_finviz_load_finished)
+                except:
+                    pass
+
             html = self.treemap_manager.generate_treemap()
             if hasattr(self, 'webEngineViewTreemap'):
                 self.webEngineViewTreemap.setHtml(html)
@@ -945,6 +1010,119 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         except Exception as e:
             print(f"트리맵 로드 실패: {str(e)}")
 
+    def load_finviz_treemap(self):
+        """Finviz 트리맵을 로드합니다."""
+        print("Finviz 트리맵 로드 중...")
+        try:
+            if hasattr(self, 'webEngineViewTreemap'):
+                # 1. 스크립트 주입 (CSS 강제 적용)
+                script = QWebEngineScript()
+                script.setName("FinvizCleanup")
+                script.setInjectionPoint(QWebEngineScript.DocumentReady)
+                script.setWorldId(QWebEngineScript.MainWorld)
+                script.setRunsOnSubFrames(False)
+                
+                css = """
+                /* 헤더, 푸터, 광고, 네비게이션 숨김 */
+                #header, .header, .navbar, nav, .footer, #footer, 
+                .ad_header, .ad_content, .is-ad, iframe, 
+                .survey-container, #survey-container,
+                div[id*="google_ads"], div[class*="ad-"],
+                .modal-backdrop, .modal, .popup, .overlay,
+                div[class*="popup"], div[class*="modal"], div[class*="overlay"],
+                #google_image_div, #credential_picker_container { 
+                    display: none !important; 
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                    visibility: hidden !important;
+                }
+                
+                /* 여백 제거 및 스크롤 방지 */
+                body, html { 
+                    padding: 0 !important; 
+                    margin: 0 !important; 
+                    overflow: hidden !important; 
+                }
+                
+                /* 컨텐츠 영역 초기화 */
+                .content {
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+                
+                /* 캔버스(지도) 전체 화면 강제 */
+                #chart_canvas { 
+                    position: fixed !important; 
+                    top: 0 !important; 
+                    left: 0 !important; 
+                    width: 100vw !important; 
+                    height: 100vh !important; 
+                    z-index: 99999 !important; 
+                    background: white !important; 
+                }
+                
+                /* 툴팁은 보이게 */
+                .d3-tip, #hover-wrapper {
+                    z-index: 100000 !important;
+                }
+                """
+                
+                # JS로 CSS 주입
+                js = f"""
+                (function() {{
+                    var style = document.createElement('style');
+                    style.type = 'text/css';
+                    style.innerHTML = `{css}`;
+                    document.head.appendChild(style);
+                }})();
+                """
+                script.setSourceCode(js)
+                
+                # 프로필에 스크립트 추가
+                self.webEngineViewTreemap.page().profile().scripts().insert(script)
+                
+                # 로드 완료 시그널 연결
+                try:
+                    self.webEngineViewTreemap.loadFinished.disconnect(self.on_finviz_load_finished)
+                except:
+                    pass
+                self.webEngineViewTreemap.loadFinished.connect(self.on_finviz_load_finished)
+                
+                # URL 로드
+                url = QtCore.QUrl("https://finviz.com/map.ashx")
+                self.webEngineViewTreemap.setUrl(url)
+                
+                print("Finviz 로드 요청 완료 (CSS 주입 포함)")
+        except Exception as e:
+            print(f"Finviz 로드 실패: {str(e)}")
+
+    def on_finviz_load_finished(self, ok):
+        """Finviz 페이지 로드 완료 로그 및 주기적 정리"""
+        current_url = self.webEngineViewTreemap.url().toString()
+        # URL이 너무 길면 잘라서 출력 (data URL 등)
+        display_url = current_url if len(current_url) < 100 else current_url[:100] + "..."
+        print(f"페이지 로드 완료 신호: {ok}, URL: {display_url}")
+        
+        if "finviz.com" in current_url:
+            # 동적으로 뜨는 팝업을 막기 위해 주기적으로 제거 스크립트 실행
+            js_cleanup = """
+            setInterval(function() {
+                var popups = document.querySelectorAll('.modal-backdrop, .modal, .popup, .overlay, div[class*="popup"], div[class*="modal"], iframe');
+                popups.forEach(function(el) {
+                    el.style.display = 'none';
+                    el.remove(); // 아예 DOM에서 제거
+                });
+                
+                // 캔버스 위치 재확인
+                var canvas = document.querySelector('#chart_canvas');
+                if (canvas) {
+                    canvas.style.zIndex = '99999';
+                }
+            }, 2000); // 2초마다 실행
+            """
+            self.webEngineViewTreemap.page().runJavaScript(js_cleanup)
 
     def closeEvent(self, event):
         """애플리케이션 종료 시 리소스 정리"""
