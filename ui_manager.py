@@ -13,6 +13,7 @@ from chart_manager import ChartManager
 from portfolio_optimizer import PortfolioOptimizer
 from backtester import Backtester
 from config_manager import ConfigManager
+from treemap_manager import TreemapManager
 from utils import StdoutRedirect, resource_path
 
 class CustomWebEnginePage(QWebEnginePage):
@@ -36,8 +37,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.chart_manager = ChartManager(self.verticalLayout_2, self.verticalLayout_7, self.imagelabel_3)
         self.portfolio_optimizer = PortfolioOptimizer(self.textBrowser, self.verticalLayout_7)
         self.backtester = Backtester(self.textBrowser, self.chart_manager)
+        self.backtester = Backtester(self.textBrowser, self.chart_manager)
         self.config_manager = ConfigManager()
         self.db_updater = DBUpdater_new.DBUpdater()  # DBUpdater 인스턴스 생성
+        self.treemap_manager = TreemapManager()
 
         self.db_lock = Lock()
         self.file_lock = Lock()
@@ -130,6 +133,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if hasattr(self, 'btn_update4'):
             self.btn_update4.clicked.connect(self.update_single_stock_ui)
 
+        # Tab Change signal connection
+        if hasattr(self, 'tabWidget'):
+            self.tabWidget.currentChanged.connect(self.on_tab_changed)
+
 
         # stdout 리다이렉션
         self.stdout_redirect = StdoutRedirect()
@@ -183,6 +190,43 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.radioButton.toggled.connect(lambda checked: self.on_radio_button_toggled(1) if checked else None)
         if hasattr(self, 'radioButton_2'):
             self.radioButton_2.toggled.connect(lambda checked: self.on_radio_button_toggled(2) if checked else None)
+
+        # 트리맵 탭 동적 추가 (UI 파일 재컴파일 없이 적용)
+        self.setup_treemap_tab()
+
+    def setup_treemap_tab(self):
+        """트리맵 탭과 위젯을 동적으로 생성합니다."""
+        if not hasattr(self, 'tabWidget'):
+            return
+
+        # 이미 탭이 있는지 확인 (이름으로 체크)
+        for i in range(self.tabWidget.count()):
+            if self.tabWidget.tabText(i) == "트리맵":
+                return
+
+        # 탭 위젯 생성
+        self.tab_3 = QtWidgets.QWidget()
+        self.tab_3.setObjectName("tab_3")
+        
+        # 레이아웃 생성
+        layout = QtWidgets.QVBoxLayout(self.tab_3)
+        
+        # 컨트롤 영역 (새로고침 버튼 등)
+        control_layout = QtWidgets.QHBoxLayout()
+        self.btn_treemap_refresh = QtWidgets.QPushButton("새로고침")
+        self.btn_treemap_refresh.clicked.connect(self.load_treemap)
+        control_layout.addWidget(self.btn_treemap_refresh)
+        control_layout.addStretch()
+        layout.addLayout(control_layout)
+        
+        # 웹뷰 생성
+        self.webEngineViewTreemap = QWebEngineView()
+        self.webEngineViewTreemap.setUrl(QtCore.QUrl("about:blank"))
+        layout.addWidget(self.webEngineViewTreemap)
+        
+        # 탭 추가
+        self.tabWidget.addTab(self.tab_3, "트리맵")
+        print("트리맵 탭이 추가되었습니다.")
 
     def load_search_conditions(self):
         """종목 탐색 조건을 파일에서 불러옵니다."""
@@ -883,6 +927,23 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             
         except Exception as e:
             print(f"개별 종목 업데이트 오류: {str(e)}")
+
+    def on_tab_changed(self, index):
+        """탭 변경 시 호출되는 메서드"""
+        current_tab_text = self.tabWidget.tabText(index)
+        if current_tab_text == "트리맵":
+            self.load_treemap()
+
+    def load_treemap(self):
+        """트리맵을 생성하고 웹뷰에 표시합니다."""
+        print("트리맵 생성 중...")
+        try:
+            html = self.treemap_manager.generate_treemap()
+            if hasattr(self, 'webEngineViewTreemap'):
+                self.webEngineViewTreemap.setHtml(html)
+                print("트리맵 로드 완료")
+        except Exception as e:
+            print(f"트리맵 로드 실패: {str(e)}")
 
 
     def closeEvent(self, event):

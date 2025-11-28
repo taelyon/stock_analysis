@@ -68,10 +68,25 @@ class DBUpdater(DBManager):
 
         sql_comp_info = """
             CREATE TABLE IF NOT EXISTS comp_info (
-                code TEXT PRIMARY KEY, company TEXT, market TEXT, country TEXT, updated_date TEXT
+                code TEXT PRIMARY KEY, company TEXT, market TEXT, country TEXT, updated_date TEXT,
+                marcap REAL, changes_ratio REAL
             );"""
         cur.execute(sql_comp_info)
         conn.commit()
+        
+        # 기존 테이블에 컬럼이 없을 경우 추가 (마이그레이션)
+        try:
+            cur.execute("ALTER TABLE comp_info ADD COLUMN marcap REAL")
+        except:
+            pass
+        try:
+            cur.execute("ALTER TABLE comp_info ADD COLUMN changes_ratio REAL")
+        except:
+            pass
+        try:
+            cur.execute("ALTER TABLE comp_info ADD COLUMN sector TEXT")
+        except:
+            pass
 
     def init_db(self, table_name='daily_price'):
         conn, cur = self._get_db_conn()
@@ -87,16 +102,26 @@ class DBUpdater(DBManager):
         conn, cur = self._get_db_conn()
         krx_list = fdr.StockListing('KRX-MARCAP')
         krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
-        krx_list = krx_list.head(500)
+        krx_list = krx_list.head(500) # 시가총액 상위 500개
         krx_list['Country'] = 'kr'
-        krx_list = krx_list[['Code', 'Name', 'Market', 'Country']]
-        krx_list = krx_list.rename(columns={'Code': 'code', 'Name': 'company', 'Market': 'market', 'Country': 'country'})
+        
+        # 필요한 컬럼 선택 및 이름 변경
+        # KRX-MARCAP 데이터 컬럼: Code, Name, Market, Marcap, Stocks, Close, Changes, ChagesRatio, Volume, Amount, Open, High, Low, Country
+        krx_list = krx_list[['Code', 'Name', 'Market', 'Country', 'Marcap', 'ChagesRatio']]
+        krx_list = krx_list.rename(columns={
+            'Code': 'code', 'Name': 'company', 'Market': 'market', 'Country': 'country',
+            'Marcap': 'marcap', 'ChagesRatio': 'changes_ratio'
+        })
         
         today = datetime.today().strftime('%Y-%m-%d')
         krx_list['updated_date'] = today
 
         for r in krx_list.itertuples():
-            sql = f"REPLACE INTO comp_info (code, company, market, country, updated_date) VALUES ('{r.code}', \"{r.company.replace('\"', '\"\"')}\", '{r.market}', '{r.country}', '{r.updated_date}')"
+            # marcap과 changes_ratio 추가 저장
+            sql = f"""
+                REPLACE INTO comp_info (code, company, market, country, updated_date, marcap, changes_ratio) 
+                VALUES ('{r.code}', "{r.company.replace('"', '""')}", '{r.market}', '{r.country}', '{r.updated_date}', {r.marcap}, {r.changes_ratio})
+            """
             cur.execute(sql)
         conn.commit()
         
@@ -164,20 +189,80 @@ class DBUpdater(DBManager):
         na_count = (sp500_list['market'] == 'N/A').sum()
         print(f"총 {len(sp500_list)}개의 S&P 500 종목 정보 업데이트를 완료했습니다. (거래소 정보 N/A: {na_count}개)")
 
+    def update_sector_info(self):
+        """네이버 금융에서 업종 정보를 크롤링하여 DB에 업데이트합니다."""
+        print("업종 정보를 업데이트합니다 (네이버 금융 크롤링)...")
+        conn, cur = self._get_db_conn()
+        
+        try:
+            url = 'https://finance.naver.com/sise/sise_group.nhn?type=upjong'
+            response = requests.get(url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 업종 링크 추출
+            sector_links = soup.select('table.type_1 tr td a')
+            
+            total_sectors = len(sector_links)
+            print(f"총 {total_sectors}개의 업종을 발견했습니다.")
+            
+            for i, link in enumerate(sector_links):
+                sector_name = link.text
+                sector_url = 'https://finance.naver.com' + link['href']
+                
+                # 업종 상세 페이지에서 종목 코드 추출
+                try:
+                    res = requests.get(sector_url)
+                    s = BeautifulSoup(res.text, 'html.parser')
+                    stocks = s.select('div.name_area a')
+                    
+                    for stock in stocks:
+                        # href에서 code 추출 (/item/main.naver?code=000000)
+                        code = stock['href'].split('code=')[-1]
+                        
+                        # DB 업데이트
+                        sql = f"UPDATE comp_info SET sector = '{sector_name}' WHERE code = '{code}'"
+                        cur.execute(sql)
+                        
+                except Exception as e:
+                    print(f"업종 '{sector_name}' 처리 중 오류: {e}")
+                
+                if (i + 1) % 10 == 0:
+                    print(f"업종 정보 업데이트 진행 중... ({i + 1}/{total_sectors})")
+                    
+            conn.commit()
+            print("업종 정보 업데이트가 완료되었습니다.")
+            
+        except Exception as e:
+            print(f"업종 정보 업데이트 실패: {e}")
+
     def update_comp_info(self, nation='all'):
         conn, cur = self._get_db_conn()
         today = datetime.today().strftime('%Y-%m-%d')
 
         if nation in ['all', 'kr']:
-            sql = "SELECT max(updated_date) FROM comp_info WHERE country = 'kr'"
-            cur.execute(sql)
-            rs = cur.fetchone()
+            # 날짜 확인
+            sql_date = "SELECT max(updated_date) FROM comp_info WHERE country = 'kr'"
+            cur.execute(sql_date)
+            rs_date = cur.fetchone()
             
-            if rs is None or rs[0] is None or rs[0] < today:
-                print("한국 주식 목록을 업데이트합니다.")
+            # 데이터 누락 확인 (marcap이 없는 경우)
+            sql_check = "SELECT count(*) FROM comp_info WHERE country = 'kr' AND marcap IS NULL"
+            cur.execute(sql_check)
+            rs_check = cur.fetchone()
+            missing_data = rs_check[0] > 0 if rs_check else False
+            
+            if rs_date is None or rs_date[0] is None or rs_date[0] < today or missing_data:
+                print("한국 주식 목록을 업데이트합니다. (최신화 또는 데이터 보강)")
                 self.krx_stock_listing()
+                self.update_sector_info() # 업종 정보 업데이트 추가
             else:
                 print("한국 주식 목록은 최신 상태입니다.")
+                # 업종 정보 누락 확인
+                sql_sector = "SELECT count(*) FROM comp_info WHERE country = 'kr' AND sector IS NULL"
+                cur.execute(sql_sector)
+                if cur.fetchone()[0] > 0:
+                     print("업종 정보가 누락되어 업데이트를 진행합니다.")
+                     self.update_sector_info()
 
         if nation in ['all', 'us']:
             sql = "SELECT max(updated_date) FROM comp_info WHERE country = 'us'"
