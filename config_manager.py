@@ -58,6 +58,13 @@ class ConfigManager:
                 except FileNotFoundError:
                     return []
 
+        def save_stock_list(self, filename, stock_list):
+            filepath = os.path.join(self.config_dir, filename)
+            with self.file_lock:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    for stock in stock_list:
+                        f.write(f"{stock}\n")
+
         def add_stock_to_list(self, filename, company):
             filepath = os.path.join(self.config_dir, filename)
             with self.file_lock:
@@ -65,7 +72,6 @@ class ConfigManager:
                     f.write(f"{company}\n")
 
         def remove_stock_from_list(self, filename, company_to_remove):
-            
             filepath = os.path.join(self.config_dir, filename)           
             with self.file_lock:
                 lines = []

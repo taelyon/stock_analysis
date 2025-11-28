@@ -37,6 +37,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.portfolio_optimizer = PortfolioOptimizer(self.textBrowser, self.verticalLayout_7)
         self.backtester = Backtester(self.textBrowser, self.chart_manager)
         self.config_manager = ConfigManager()
+        self.db_updater = DBUpdater_new.DBUpdater()  # DBUpdater 인스턴스 생성
 
         self.db_lock = Lock()
         self.file_lock = Lock()
@@ -46,6 +47,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.current_searched_stock = None
         self.search_condition_text_1 = ""
         self.search_condition_text_2 = ""
+        self.search_running = False  # 종목 탐색 실행 플래그
+
 
         # 최소 signal connections
         self.btn_find.clicked.connect(self.find_stock)
@@ -53,11 +56,19 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # ListWidget signal connections
         if hasattr(self, 'lb_hold'):
-            self.lb_hold.itemClicked.connect(self.on_list_item_clicked)
+            self.lb_hold.itemDoubleClicked.connect(self.on_list_item_clicked)
         if hasattr(self, 'lb_int'):
-            self.lb_int.itemClicked.connect(self.on_list_item_clicked)
+            self.lb_int.itemDoubleClicked.connect(self.on_list_item_clicked)
         if hasattr(self, 'lb_search'):
-            self.lb_search.itemClicked.connect(self.on_list_item_clicked)
+            self.lb_search.itemDoubleClicked.connect(self.on_list_item_clicked)
+
+        # Select Button signal connections
+        if hasattr(self, 'btn'):
+            self.btn.clicked.connect(lambda: self.on_list_item_clicked(self.lb_search.currentItem()))
+        if hasattr(self, 'btn2'):
+            self.btn2.clicked.connect(lambda: self.on_list_item_clicked(self.lb_hold.currentItem()))
+        if hasattr(self, 'btn3'):
+            self.btn3.clicked.connect(lambda: self.on_list_item_clicked(self.lb_int.currentItem()))
 
         # Backtesting signal connections
         self.buyConditionInputButton.clicked.connect(self.save_buy_condition)
@@ -68,6 +79,57 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.sellConditionDefaultButton.clicked.connect(self.reset_sell_condition)
         self.BacktestingButton.clicked.connect(self.run_backtest)
         self.optimize_button.clicked.connect(self.run_portfolio_optimization)
+
+        # Stock Search signal connections
+        if hasattr(self, 'btn_search1'):
+            self.btn_search1.clicked.connect(lambda: self.filter_search_list('kr'))
+        if hasattr(self, 'btn_search2'):
+            self.btn_search2.clicked.connect(lambda: self.filter_search_list('us'))
+        if hasattr(self, 'btn_search3'):
+            self.btn_search3.clicked.connect(lambda: self.filter_search_list('all'))
+        if hasattr(self, 'btn_stop2'):
+            self.btn_stop2.clicked.connect(self.stop_search)
+        if hasattr(self, 'btn_addhold'):
+            self.btn_addhold.clicked.connect(lambda: self.add_to_list_from_search('hold'))
+        if hasattr(self, 'btn_addint'):
+            self.btn_addint.clicked.connect(lambda: self.add_to_list_from_search('interest'))
+
+        # List Box Delete signal connections
+        if hasattr(self, 'btn_del1'):
+            self.btn_del1.clicked.connect(self.remove_from_hold_list)
+        if hasattr(self, 'btn_del2'):
+            self.btn_del2.clicked.connect(self.remove_from_interest_list)
+
+        # Search Condition Button signal connections
+        if hasattr(self, 'SearchConditionInputButton'):
+            self.SearchConditionInputButton.clicked.connect(self.save_search_condition)
+        if hasattr(self, 'SearchConditionInputButton_4'):
+            self.SearchConditionInputButton_4.clicked.connect(self.reset_search_condition)
+
+        # Cross-List Add signal connections
+        if hasattr(self, 'btn_addint1'):
+            self.btn_addint1.clicked.connect(self.add_from_hold_to_interest)
+        if hasattr(self, 'btn_addhold1'):
+            self.btn_addhold1.clicked.connect(self.add_from_interest_to_hold)
+
+        # Find Widget Add signal connections
+        if hasattr(self, 'btn_addhold2'):
+            self.btn_addhold2.clicked.connect(self.add_from_find_to_hold)
+        if hasattr(self, 'btn_addint2'):
+            self.btn_addint2.clicked.connect(self.add_from_find_to_interest)
+
+        # Update Button signal connections
+        if hasattr(self, 'btn_update1'):
+            self.btn_update1.clicked.connect(lambda: self.run_update_thread('kr'))
+        if hasattr(self, 'btn_update2'):
+            self.btn_update2.clicked.connect(lambda: self.run_update_thread('us'))
+        if hasattr(self, 'btn_update3'):
+            self.btn_update3.clicked.connect(lambda: self.run_update_thread('all'))
+        if hasattr(self, 'btn_stop1'):
+            self.btn_stop1.clicked.connect(self.stop_update_thread)
+        if hasattr(self, 'btn_update4'):
+            self.btn_update4.clicked.connect(self.update_single_stock_ui)
+
 
         # stdout 리다이렉션
         self.stdout_redirect = StdoutRedirect()
@@ -106,6 +168,56 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # 백테스팅 시작일 기본값 설정 (1년 전)
         one_year_ago = QtCore.QDate.currentDate().addYears(-1)
         self.dateEdit_start.setDate(one_year_ago)
+        
+        # 상승주/저가주 버튼 숨기기
+        if hasattr(self, 'SearchConditionInputButton_2'):
+            self.SearchConditionInputButton_2.hide()
+        if hasattr(self, 'SearchConditionInputButton_3'):
+            self.SearchConditionInputButton_3.hide()
+        
+        # 종목 탐색 조건 로딩
+        self.load_search_conditions()
+        
+        # 라디오 버튼 연결
+        if hasattr(self, 'radioButton'):
+            self.radioButton.toggled.connect(lambda checked: self.on_radio_button_toggled(1) if checked else None)
+        if hasattr(self, 'radioButton_2'):
+            self.radioButton_2.toggled.connect(lambda checked: self.on_radio_button_toggled(2) if checked else None)
+
+    def load_search_conditions(self):
+        """종목 탐색 조건을 파일에서 불러옵니다."""
+        try:
+            # 상승주 조건 (search_condition_1.txt)
+            self.search_condition_1 = self.config_manager.load_condition('search_condition_1.txt')
+            if not self.search_condition_1:
+                self.search_condition_1 = "(df.RSI.values[-2] < 30 < df.RSI.values[-1] and df.macd.values[-2] < df.macd.values[-1]) or (df.macdhist.values[-2] < 0 < df.macdhist.values[-1])"
+                self.config_manager.save_condition('search_condition_1.txt', self.search_condition_1)
+            
+            # 저가주 조건 (search_condition_2.txt)
+            self.search_condition_2 = self.config_manager.load_condition('search_condition_2.txt')
+            if not self.search_condition_2:
+                self.search_condition_2 = "(df.open.values[-1] < df.ENBOTTOM.values[-1] or df.RSI.values[-1] < 30) and (df.macdhist.values[-2] < df.macdhist.values[-1]) and (df.close.values[-1] > df.open.values[-1])"
+                self.config_manager.save_condition('search_condition_2.txt', self.search_condition_2)
+            
+            # 기본값으로 상승주 조건 표시
+            if hasattr(self, 'lineEditSearchCondition'):
+                self.lineEditSearchCondition.setText(self.search_condition_1)
+                
+            # 상승 라디오 버튼을 기본 선택
+            if hasattr(self, 'radioButton'):
+                self.radioButton.setChecked(True)
+                
+            print("종목 탐색 조건을 불러왔습니다.")
+        except Exception as e:
+            print(f"종목 탐색 조건 로딩 실패: {str(e)}")
+    
+    def on_radio_button_toggled(self, button_id):
+        """라디오 버튼 선택 시 해당 조건을 텍스트 필드에 표시합니다."""
+        if hasattr(self, 'lineEditSearchCondition'):
+            if button_id == 1:  # 상승
+                self.lineEditSearchCondition.setText(self.search_condition_1)
+            elif button_id == 2:  # 저가
+                self.lineEditSearchCondition.setText(self.search_condition_2)
 
     def load_stock_lists(self):
         """files 폴더의 텍스트 파일에서 종목 리스트를 불러옵니다."""
@@ -165,6 +277,42 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.lineEditSellCondition.setText(cond)
         self.lineEditSellCondition.setText(cond)
         print("매도 조건식이 초기화되었습니다.")
+
+    def save_search_condition(self):
+        """종목 탐색 조건을 저장합니다."""
+        try:
+            if not hasattr(self, 'lineEditSearchCondition'):
+                return
+            
+            condition = self.lineEditSearchCondition.text()
+            
+            if hasattr(self, 'radioButton') and self.radioButton.isChecked():
+                self.config_manager.save_condition('search_condition_1.txt', condition)
+                self.search_condition_1 = condition
+                print("상승주 검색 조건이 저장되었습니다.")
+            elif hasattr(self, 'radioButton_2') and self.radioButton_2.isChecked():
+                self.config_manager.save_condition('search_condition_2.txt', condition)
+                self.search_condition_2 = condition
+                print("저가주 검색 조건이 저장되었습니다.")
+            else:
+                print("저장할 조건 유형(상승/저가)을 선택해주세요.")
+                
+        except Exception as e:
+            print(f"조건 저장 중 오류: {str(e)}")
+
+    def reset_search_condition(self):
+        """종목 탐색 조건을 초기화합니다."""
+        try:
+            self.search_condition_1, self.search_condition_2 = self.config_manager.save_default_search_conditions()
+            
+            if hasattr(self, 'radioButton') and self.radioButton.isChecked():
+                self.lineEditSearchCondition.setText(self.search_condition_1)
+            elif hasattr(self, 'radioButton_2') and self.radioButton_2.isChecked():
+                self.lineEditSearchCondition.setText(self.search_condition_2)
+                
+            print("검색 조건이 초기화되었습니다.")
+        except Exception as e:
+            print(f"조건 초기화 중 오류: {str(e)}")
 
     def run_backtest(self):
         try:
@@ -226,12 +374,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def on_list_item_clicked(self, item):
         if item:
-            self.le_ent.setText(item.text())
-            self.find_stock()
+            # self.le_ent.setText(item.text())  # 입력 필드 업데이트 하지 않음
+            self.find_stock(item.text())
 
-    def find_stock(self):
+    def find_stock(self, company=None):
         try:
-            company = self.le_ent.text()
+            if company is None:
+                company = self.le_ent.text()
             print(f"종목 조회 시작: {company}")
             
             with self.db_lock:
@@ -358,6 +507,383 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     
         except Exception as e:
             print(f"update_stock_price 오류: {str(e)}")
+
+    def filter_search_list(self, country):
+        """선택된 조건(상승/저가)에 맞는 종목을 필터링하여 표시합니다."""
+        def run():
+            try:
+                self.lb_search.clear()
+                self.search_running = True
+                
+                # 선택된 라디오 버튼 확인
+                if hasattr(self, 'radioButton') and self.radioButton.isChecked():
+                    condition_type = 1  # 상승
+                    condition = self.search_condition_1
+                elif hasattr(self, 'radioButton_2') and self.radioButton_2.isChecked():
+                    condition_type = 2  # 저가
+                    condition = self.search_condition_2
+                else:
+                    print("조건을 선택해주세요.")
+                    self.search_running = False
+                    return
+                
+                print(f"{'상승' if condition_type == 1 else '저가'} 조건으로 {country} 종목을 검색합니다...")
+                
+                mk = DBUpdater_new.MarketDB()
+                all_stocks = mk.get_comp_info()
+                
+                if country == 'kr':
+                    all_stocks = all_stocks[all_stocks['country'] == 'kr']
+                elif country == 'us':
+                    all_stocks = all_stocks[all_stocks['country'] == 'us']
+                
+                if all_stocks.empty:
+                    print("표시할 종목이 없습니다. 먼저 업데이트를 진행해주세요.")
+                    self.search_running = False
+                    return
+                
+                # 조건에 맞는 종목 필터링
+                matching_stocks = []
+                total = len(all_stocks)
+                
+                for idx, (_, stock) in enumerate(all_stocks.iterrows(), 1):
+                    # 중단 확인
+                    if not self.search_running:
+                        print(f"\n검색이 중단되었습니다. ({len(matching_stocks)}개 종목 발견)")
+                        return
+                    
+                    try:
+                        code = stock['code']
+                        company = stock['company']
+                        
+                        # 종목 데이터 가져오기
+                        df = mk.get_daily_price(company)
+                        
+                        if df.empty or len(df) < 30:  # 최소 30일 데이터 필요
+                            continue
+                        
+                        # 기술적 지표 계산
+                        df = self.calculate_indicators(df)
+                        
+                        if df is None or len(df) < 2:
+                            continue
+                        
+                        # 조건 평가
+                        try:
+                            if eval(condition):
+                                # 즉시 리스트 박스에 추가
+                                self.lb_search.addItem(company)
+                                matching_stocks.append(company)
+                                print(f"[{idx}/{total}] {company} - 조건 만족")
+                            else:
+                                print(f"[{idx}/{total}] {company} - 조건 불만족", end='\r')
+                        except Exception as e:
+                            print(f"[{idx}/{total}] {company} - 조건 평가 오류: {str(e)}", end='\r')
+                            continue
+                            
+                    except Exception as e:
+                        print(f"[{idx}/{total}] {stock.get('company', 'Unknown')} - 처리 오류: {str(e)}", end='\r')
+                        continue
+                
+                # 검색 완료 메시지
+                if matching_stocks:
+                    print(f"\n검색 완료: {len(matching_stocks)}개 종목이 조건을 만족합니다.")
+                else:
+                    print("\n조건을 만족하는 종목이 없습니다.")
+                    
+            except Exception as e:
+                print(f"종목 검색 중 오류 발생: {str(e)}")
+            finally:
+                self.search_running = False
+        
+        # 백그라운드 스레드에서 실행
+        t = Thread(target=run, daemon=True)
+        t.start()
+    
+    def stop_search(self):
+        """종목 탐색을 중단합니다."""
+        if self.search_running:
+            self.search_running = False
+            print("종목 탐색 중단 요청됨...")
+        else:
+            print("실행 중인 탐색이 없습니다.")
+    
+    def calculate_indicators(self, df):
+        """기술적 지표를 계산합니다."""
+        try:
+            import pandas as pd
+            
+            # 데이터 복사
+            df = df.copy()
+            
+            # RSI 계산
+            delta = df['close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df['RSI'] = 100 - (100 / (1 + rs))
+            
+            # MACD 계산
+            exp1 = df['close'].ewm(span=12, adjust=False).mean()
+            exp2 = df['close'].ewm(span=26, adjust=False).mean()
+            df['macd'] = exp1 - exp2
+            df['macdsignal'] = df['macd'].ewm(span=9, adjust=False).mean()
+            df['macdhist'] = df['macd'] - df['macdsignal']
+            
+            # 엔벨로프 계산 (Envelope Bands)
+            df['MA20'] = df['close'].rolling(window=20).mean()
+            df['ENTOP'] = df['MA20'] * 1.1  # 상단 밴드 (+10%)
+            df['ENBOTTOM'] = df['MA20'] * 0.9  # 하단 밴드 (-10%)
+            
+            return df
+            
+        except Exception as e:
+            print(f"지표 계산 오류: {str(e)}")
+            return None
+
+    def add_to_list_from_search(self, list_type):
+        """종목 탐색 리스트에서 선택된 종목을 보유 또는 관심 리스트에 추가합니다."""
+        try:
+            if not hasattr(self, 'lb_search'):
+                return
+            
+            current_item = self.lb_search.currentItem()
+            if not current_item:
+                print("추가할 종목을 선택해주세요.")
+                return
+            
+            stock_name = current_item.text()
+            
+            if list_type == 'hold':
+                # 보유 종목 리스트에 추가
+                if hasattr(self, 'lb_hold'):
+                    # 중복 확인
+                    items = [self.lb_hold.item(i).text() for i in range(self.lb_hold.count())]
+                    if stock_name not in items:
+                        self.lb_hold.addItem(stock_name)
+                        # 파일에 저장
+                        items.append(stock_name)
+                        self.config_manager.save_stock_list('stock_hold.txt', items)
+                        print(f"'{stock_name}'을(를) 보유 종목에 추가했습니다.")
+                    else:
+                        print(f"'{stock_name}'은(는) 이미 보유 종목에 있습니다.")
+            
+            elif list_type == 'interest':
+                # 관심 종목 리스트에 추가
+                if hasattr(self, 'lb_int'):
+                    # 중복 확인
+                    items = [self.lb_int.item(i).text() for i in range(self.lb_int.count())]
+                    if stock_name not in items:
+                        self.lb_int.addItem(stock_name)
+                        # 파일에 저장
+                        items.append(stock_name)
+                        self.config_manager.save_stock_list('stock_interest.txt', items)
+                        print(f"'{stock_name}'을(를) 관심 종목에 추가했습니다.")
+                    else:
+                        print(f"'{stock_name}'은(는) 이미 관심 종목에 있습니다.")
+                        
+        except Exception as e:
+            print(f"종목 추가 중 오류 발생: {str(e)}")
+
+    def remove_from_hold_list(self):
+        """보유 종목 리스트에서 선택된 종목을 삭제합니다."""
+        try:
+            if not hasattr(self, 'lb_hold'):
+                return
+            
+            current_item = self.lb_hold.currentItem()
+            if not current_item:
+                print("삭제할 종목을 선택해주세요.")
+                return
+            
+            stock_name = current_item.text()
+            
+            # 파일에서 삭제
+            self.config_manager.remove_stock_from_list('stock_hold.txt', stock_name)
+            
+            # UI에서 삭제
+            row = self.lb_hold.row(current_item)
+            self.lb_hold.takeItem(row)
+            
+            print(f"'{stock_name}'을(를) 보유 종목에서 삭제했습니다.")
+            
+        except Exception as e:
+            print(f"보유 종목 삭제 중 오류 발생: {str(e)}")
+
+    def remove_from_interest_list(self):
+        """관심 종목 리스트에서 선택된 종목을 삭제합니다."""
+        try:
+            if not hasattr(self, 'lb_int'):
+                return
+            
+            current_item = self.lb_int.currentItem()
+            if not current_item:
+                print("삭제할 종목을 선택해주세요.")
+                return
+            
+            stock_name = current_item.text()
+            
+            # 파일에서 삭제
+            self.config_manager.remove_stock_from_list('stock_interest.txt', stock_name)
+            
+            # UI에서 삭제
+            row = self.lb_int.row(current_item)
+            self.lb_int.takeItem(row)
+            
+            print(f"'{stock_name}'을(를) 관심 종목에서 삭제했습니다.")
+            
+        except Exception as e:
+            print(f"관심 종목 삭제 중 오류 발생: {str(e)}")
+
+    def add_from_hold_to_interest(self):
+        """보유 종목 리스트에서 선택된 종목을 관심 종목 리스트에 추가합니다."""
+        try:
+            if not hasattr(self, 'lb_hold'):
+                return
+            
+            current_item = self.lb_hold.currentItem()
+            if not current_item:
+                print("관심 종목으로 등록할 보유 종목을 선택해주세요.")
+                return
+            
+            stock_name = current_item.text()
+            
+            # 관심 종목 리스트에 추가
+            if hasattr(self, 'lb_int'):
+                # 중복 확인
+                items = [self.lb_int.item(i).text() for i in range(self.lb_int.count())]
+                if stock_name not in items:
+                    self.lb_int.addItem(stock_name)
+                    # 파일에 저장
+                    items.append(stock_name)
+                    self.config_manager.save_stock_list('stock_interest.txt', items)
+                    print(f"'{stock_name}'을(를) 관심 종목에 추가했습니다.")
+                else:
+                    print(f"'{stock_name}'은(는) 이미 관심 종목에 있습니다.")
+                    
+        except Exception as e:
+            print(f"관심 종목 추가 중 오류 발생: {str(e)}")
+
+    def add_from_interest_to_hold(self):
+        """관심 종목 리스트에서 선택된 종목을 보유 종목 리스트에 추가합니다."""
+        try:
+            if not hasattr(self, 'lb_int'):
+                return
+            
+            current_item = self.lb_int.currentItem()
+            if not current_item:
+                print("보유 종목으로 등록할 관심 종목을 선택해주세요.")
+                return
+            
+            stock_name = current_item.text()
+            
+            # 보유 종목 리스트에 추가
+            if hasattr(self, 'lb_hold'):
+                # 중복 확인
+                items = [self.lb_hold.item(i).text() for i in range(self.lb_hold.count())]
+                if stock_name not in items:
+                    self.lb_hold.addItem(stock_name)
+                    # 파일에 저장
+                    items.append(stock_name)
+                    self.config_manager.save_stock_list('stock_hold.txt', items)
+                    print(f"'{stock_name}'을(를) 보유 종목에 추가했습니다.")
+                else:
+                    print(f"'{stock_name}'은(는) 이미 보유 종목에 있습니다.")
+                    
+        except Exception as e:
+            print(f"보유 종목 추가 중 오류 발생: {str(e)}")
+
+    def add_from_find_to_hold(self):
+        """종목 조회 입력창의 종목을 보유 종목 리스트에 추가합니다."""
+        try:
+            stock_name = self.le_ent.text()
+            if not stock_name:
+                print("추가할 종목을 입력하거나 조회해주세요.")
+                return
+            
+            # 보유 종목 리스트에 추가
+            if hasattr(self, 'lb_hold'):
+                # 중복 확인
+                items = [self.lb_hold.item(i).text() for i in range(self.lb_hold.count())]
+                if stock_name not in items:
+                    self.lb_hold.addItem(stock_name)
+                    # 파일에 저장
+                    items.append(stock_name)
+                    self.config_manager.save_stock_list('stock_hold.txt', items)
+                    print(f"'{stock_name}'을(를) 보유 종목에 추가했습니다.")
+                else:
+                    print(f"'{stock_name}'은(는) 이미 보유 종목에 있습니다.")
+                    
+        except Exception as e:
+            print(f"보유 종목 추가 중 오류 발생: {str(e)}")
+
+    def add_from_find_to_interest(self):
+        """종목 조회 입력창의 종목을 관심 종목 리스트에 추가합니다."""
+        try:
+            stock_name = self.le_ent.text()
+            if not stock_name:
+                print("추가할 종목을 입력하거나 조회해주세요.")
+                return
+            
+            # 관심 종목 리스트에 추가
+            if hasattr(self, 'lb_int'):
+                # 중복 확인
+                items = [self.lb_int.item(i).text() for i in range(self.lb_int.count())]
+                if stock_name not in items:
+                    self.lb_int.addItem(stock_name)
+                    # 파일에 저장
+                    items.append(stock_name)
+                    self.config_manager.save_stock_list('stock_interest.txt', items)
+                    print(f"'{stock_name}'을(를) 관심 종목에 추가했습니다.")
+                else:
+                    print(f"'{stock_name}'은(는) 이미 관심 종목에 있습니다.")
+                    
+        except Exception as e:
+            print(f"관심 종목 추가 중 오류 발생: {str(e)}")
+
+    def run_update_thread(self, nation):
+        """DB 업데이트를 별도 스레드에서 실행합니다."""
+        if hasattr(self, 'update_thread') and self.update_thread.is_alive():
+            print("이미 업데이트가 진행 중입니다.")
+            return
+
+        print(f"'{nation}' 종목 업데이트를 시작합니다...")
+        self.update_thread = Thread(target=self._run_update, args=(nation,), daemon=True)
+        self.update_thread.start()
+
+    def _run_update(self, nation):
+        try:
+            # 먼저 종목 목록 업데이트
+            self.db_updater.update_comp_info(nation)
+            # 그 다음 시세 업데이트
+            self.db_updater.update_daily_price(nation)
+        except Exception as e:
+            print(f"업데이트 중 오류 발생: {e}")
+
+    def stop_update_thread(self):
+        """DB 업데이트를 중단합니다."""
+        print("업데이트 중단 요청...")
+        self.db_updater.update_daily_price('stop')
+
+    def update_single_stock_ui(self):
+        """개별 종목 업데이트 (UI 버튼 연결용)"""
+        try:
+            if not hasattr(self, 'ent_stock'):
+                return
+            
+            company = self.ent_stock.text()
+            if not company:
+                print("업데이트할 종목명/코드를 입력해주세요.")
+                return
+            
+            print(f"'{company}' 업데이트 요청...")
+            # 별도 스레드에서 실행하여 UI 프리징 방지
+            t = Thread(target=self.db_updater.update_single_stock_all_data, args=(company,), daemon=True)
+            t.start()
+            
+        except Exception as e:
+            print(f"개별 종목 업데이트 오류: {str(e)}")
+
 
     def closeEvent(self, event):
         """애플리케이션 종료 시 리소스 정리"""
