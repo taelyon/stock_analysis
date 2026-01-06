@@ -101,6 +101,7 @@ class DBUpdater(DBManager):
     def krx_stock_listing(self):
         conn, cur = self._get_db_conn()
         krx_list = fdr.StockListing('KRX-MARCAP')
+            
         krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
         krx_list = krx_list.head(500) # 시가총액 상위 500개
         krx_list['Country'] = 'kr'

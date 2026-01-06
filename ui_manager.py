@@ -59,11 +59,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # ListWidget signal connections
         if hasattr(self, 'lb_hold'):
-            self.lb_hold.itemDoubleClicked.connect(self.on_list_item_clicked)
+            self.lb_hold.itemClicked.connect(self.on_list_item_clicked)
         if hasattr(self, 'lb_int'):
-            self.lb_int.itemDoubleClicked.connect(self.on_list_item_clicked)
+            self.lb_int.itemClicked.connect(self.on_list_item_clicked)
         if hasattr(self, 'lb_search'):
-            self.lb_search.itemDoubleClicked.connect(self.on_list_item_clicked)
+            self.lb_search.itemClicked.connect(self.on_list_item_clicked)
 
         # Select Button signal connections
         if hasattr(self, 'btn'):
