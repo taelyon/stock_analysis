@@ -482,7 +482,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def find_stock(self, company=None):
         try:
-            if company is None:
+            if company is None or isinstance(company, bool):
                 company = self.le_ent.text()
             print(f"종목 조회 시작: {company}")
             

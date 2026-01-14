@@ -2,3 +2,6 @@
 Nvidia
 Palantir Technologies
 Tesla, Inc.
+KODEX 미국휴머노이드로봇
+KODEX 미국AI소프트웨어TOP10
+KODEX 미국AI전력핵심인프라

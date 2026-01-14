@@ -100,31 +100,57 @@ class DBUpdater(DBManager):
 
     def krx_stock_listing(self):
         conn, cur = self._get_db_conn()
+        
+        # 1. KRX 주식 (KRX-MARCAP)
+        print("KRX 주식 목록(KRX-MARCAP) 다운로드 중...")
         krx_list = fdr.StockListing('KRX-MARCAP')
-            
         krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
         krx_list = krx_list.head(500) # 시가총액 상위 500개
         krx_list['Country'] = 'kr'
         
-        # 필요한 컬럼 선택 및 이름 변경
-        # KRX-MARCAP 데이터 컬럼: Code, Name, Market, Marcap, Stocks, Close, Changes, ChagesRatio, Volume, Amount, Open, High, Low, Country
         krx_list = krx_list[['Code', 'Name', 'Market', 'Country', 'Marcap', 'ChagesRatio']]
         krx_list = krx_list.rename(columns={
             'Code': 'code', 'Name': 'company', 'Market': 'market', 'Country': 'country',
             'Marcap': 'marcap', 'ChagesRatio': 'changes_ratio'
         })
+
+        # 2. KRX ETF (ETF/KR)
+        print("KRX ETF 목록(ETF/KR) 다운로드 중...")
+        etf_list = fdr.StockListing('ETF/KR')
+        etf_list['Country'] = 'kr'
+        etf_list['Market'] = 'ETF'
+        
+        # ETF 데이터 컬럼 매핑 ('ChangeRate' -> 'changes_ratio' 등 확인 필요)
+        # ETF/KR Columns: ['Symbol', 'Category', 'Name', 'Price', 'RiseFall', 'Change', 'ChangeRate', 'NAV', 'EarningRate', 'Volume', 'Amount', 'MarCap']
+        # ChangeRate가 %단위인지 확인 필요. 보통 FDR에서 ChangeRate는 %일 수 있음. KRX-MARCAP의 ChagesRatio도 %임.
+        
+        etf_list = etf_list[['Symbol', 'Name', 'Market', 'Country', 'MarCap', 'ChangeRate']]
+        etf_list = etf_list.rename(columns={
+            'Symbol': 'code', 'Name': 'company', 'Market': 'market', 'Country': 'country',
+            'MarCap': 'marcap', 'ChangeRate': 'changes_ratio'
+        })
+        
+        # 병합
+        combined_list = pd.concat([krx_list, etf_list], ignore_index=True)
         
         today = datetime.today().strftime('%Y-%m-%d')
-        krx_list['updated_date'] = today
+        combined_list['updated_date'] = today
 
-        for r in krx_list.itertuples():
+        print(f"총 {len(combined_list)}개 종목(주식+ETF)을 DB에 저장합니다.")
+
+        for r in combined_list.itertuples():
             # marcap과 changes_ratio 추가 저장
+            # NaN 처리
+            marcap = r.marcap if pd.notnull(r.marcap) else 0
+            changes_ratio = r.changes_ratio if pd.notnull(r.changes_ratio) else 0
+            
             sql = f"""
                 REPLACE INTO comp_info (code, company, market, country, updated_date, marcap, changes_ratio) 
-                VALUES ('{r.code}', "{r.company.replace('"', '""')}", '{r.market}', '{r.country}', '{r.updated_date}', {r.marcap}, {r.changes_ratio})
+                VALUES ('{r.code}', "{r.company.replace('"', '""')}", '{r.market}', '{r.country}', '{r.updated_date}', {marcap}, {changes_ratio})
             """
             cur.execute(sql)
         conn.commit()
+
         
     def us_stock_listing(self):
         """ S&P 500 종목을 가져오되, market 열에는 실제 상장 거래소를 표시합니다. """
