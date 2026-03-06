@@ -2,5 +2,6 @@
 META
 GOOG
 IONQ
-Microsoft
 AAPL
+MSFT
+KODEX 방산TOP10

@@ -102,10 +102,44 @@ class DBUpdater(DBManager):
         conn, cur = self._get_db_conn()
         
         # 1. KRX 주식 (KRX-MARCAP)
-        print("KRX 주식 목록(KRX-MARCAP) 다운로드 중...")
-        krx_list = fdr.StockListing('KRX-MARCAP')
-        krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
-        krx_list = krx_list.head(500) # 시가총액 상위 500개
+        print("KRX 주식 목록 다운로드 중...")
+        try:
+            krx_list = fdr.StockListing('KRX-MARCAP')
+            krx_list.sort_values(by='Marcap', ascending=False, inplace=True)
+            krx_list = krx_list.head(500) # 시가총액 상위 500개
+        except Exception as e:
+            print(f"KRX-MARCAP API 오류 발생({e}) - 네이버 금융 시가총액을 크롤링하여 상위 500개를 대체 조회합니다...")
+            import requests, io
+            
+            top_stocks = []
+            for sosok in [0, 1]:  # 0: KOSPI, 1: KOSDAQ
+                for page in range(1, 7):
+                    try:
+                        url = f'https://finance.naver.com/sise/sise_market_sum.nhn?sosok={sosok}&page={page}'
+                        res = requests.get(url, headers={'User-agent': 'Mozilla/5.0'})
+                        tables = pd.read_html(io.StringIO(res.text), encoding='euc-kr')
+                        df = tables[1].dropna(subset=['종목명'])
+                        for _, row in df.iterrows():
+                            c_str = str(row.get('등락률', '0')).replace('%', '').replace('+', '').strip()
+                            try: c_val = float(c_str)
+                            except: c_val = 0.0
+                            
+                            m_val = float(str(row.get('시가총액', '0')).replace(',', '')) * 100000000
+                            top_stocks.append({'company': row['종목명'], 'marcap': m_val, 'changes_ratio': c_val})
+                    except: pass
+            
+            top_df = pd.DataFrame(top_stocks)
+            krx_desc = fdr.StockListing('KRX-DESC')
+            if not top_df.empty:
+                krx_list = pd.merge(krx_desc, top_df, left_on='Name', right_on='company', how='inner')
+                krx_list = krx_list.sort_values(by='marcap', ascending=False).head(500)
+                krx_list['Marcap'] = krx_list['marcap']
+                krx_list['ChagesRatio'] = krx_list['changes_ratio']
+            else:
+                krx_list = krx_desc.head(500)
+                if 'Marcap' not in krx_list.columns: krx_list['Marcap'] = 0
+                if 'ChagesRatio' not in krx_list.columns: krx_list['ChagesRatio'] = 0
+            
         krx_list['Country'] = 'kr'
         
         krx_list = krx_list[['Code', 'Name', 'Market', 'Country', 'Marcap', 'ChagesRatio']]
@@ -137,6 +171,11 @@ class DBUpdater(DBManager):
         combined_list['updated_date'] = today
 
         print(f"총 {len(combined_list)}개 종목(주식+ETF)을 DB에 저장합니다.")
+        
+        # 이전 크롤링으로 잘못 저장되어서 남아있는 전체 종목(2800여개) 등의 데이터를 삭제 (수동 추가된 NULL 제외)
+        try:
+            cur.execute("DELETE FROM comp_info WHERE country='kr' AND updated_date IS NOT NULL")
+        except: pass
 
         for r in combined_list.itertuples():
             # marcap과 changes_ratio 추가 저장
@@ -218,7 +257,7 @@ class DBUpdater(DBManager):
 
     def update_sector_info(self):
         """네이버 금융에서 업종 정보를 크롤링하여 DB에 업데이트합니다."""
-        print("업종 정보를 업데이트합니다 (네이버 금융 크롤링)...")
+        print("업종 정보를 업데이트합니다 (네이버 금융 크롤링 병렬 처리)...")
         conn, cur = self._get_db_conn()
         
         try:
@@ -226,36 +265,37 @@ class DBUpdater(DBManager):
             response = requests.get(url)
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 업종 링크 추출
             sector_links = soup.select('table.type_1 tr td a')
-            
             total_sectors = len(sector_links)
-            print(f"총 {total_sectors}개의 업종을 발견했습니다.")
+            print(f"총 {total_sectors}개의 업종을 발견했습니다. 병렬 수집을 시작합니다...")
             
-            for i, link in enumerate(sector_links):
+            # 병렬 처리를 위한 함수
+            def fetch_sector_stocks(link):
                 sector_name = link.text
                 sector_url = 'https://finance.naver.com' + link['href']
-                
-                # 업종 상세 페이지에서 종목 코드 추출
+                codes = []
                 try:
                     res = requests.get(sector_url)
                     s = BeautifulSoup(res.text, 'html.parser')
                     stocks = s.select('div.name_area a')
-                    
                     for stock in stocks:
-                        # href에서 code 추출 (/item/main.naver?code=000000)
                         code = stock['href'].split('code=')[-1]
-                        
-                        # DB 업데이트
-                        sql = f"UPDATE comp_info SET sector = '{sector_name}' WHERE code = '{code}'"
-                        cur.execute(sql)
-                        
+                        codes.append((sector_name, code))
                 except Exception as e:
-                    print(f"업종 '{sector_name}' 처리 중 오류: {e}")
+                    pass
+                return codes
+
+            all_sector_updates = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                results = executor.map(fetch_sector_stocks, sector_links)
+                for codes in results:
+                    all_sector_updates.extend(codes)
+            
+            # DB 일괄 업데이트
+            for sector_name, code in all_sector_updates:
+                sql = f"UPDATE comp_info SET sector = '{sector_name}' WHERE code = '{code}'"
+                cur.execute(sql)
                 
-                if (i + 1) % 10 == 0:
-                    print(f"업종 정보 업데이트 진행 중... ({i + 1}/{total_sectors})")
-                    
             conn.commit()
             print("업종 정보 업데이트가 완료되었습니다.")
             
@@ -477,7 +517,7 @@ class DBUpdater(DBManager):
         cur.execute("SELECT code, country FROM comp_info")
         stocks = [(code, country) for code, country in cur.fetchall() if nation == 'all' or nation == country]
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = [executor.submit(self.update_daily_price_by_code, code, country, period) for code, country in stocks]
             
             for i, future in enumerate(concurrent.futures.as_completed(futures), 1):

@@ -148,6 +148,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def initialize_ui(self):
         self.le_ent.setPlaceholderText("종목코드 또는 종목명 조회")
         
+        # PyInstaller(.exe) 환경에서 이미지 경로를 제대로 찾기 위해 resource_path 적용
+        if hasattr(self, 'imagelabel_3'):
+            self.imagelabel_3.setPixmap(QtGui.QPixmap(resource_path("files/stock market data analysis program.jpg")))
+            
         # 리스트박스 높이 제한
         if hasattr(self, 'lb_search'):
             self.lb_search.setMaximumHeight(150)

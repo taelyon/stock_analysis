@@ -30,9 +30,10 @@ class DataManager:
 
             print(f"DB에 '{company}' 정보가 없어 인터넷에서 검색합니다.")
             try:
-                markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX']
+                markets = ['NASDAQ', 'NYSE', 'AMEX', 'KRX', 'ETF/KR']
                 for market_name in markets:
-                    df_stocks = fdr.StockListing(market_name)
+                    fdr_market_name = 'KRX-DESC' if market_name == 'KRX' else market_name
+                    df_stocks = fdr.StockListing(fdr_market_name)
                     code_col = 'Code' if market_name == 'KRX' else 'Symbol'
                     if code_col not in df_stocks.columns or 'Name' not in df_stocks.columns:
                         continue
@@ -50,7 +51,7 @@ class DataManager:
                     if not stock.empty:
                         code = stock.iloc[0][code_col]
                         name = stock.iloc[0]['Name']
-                        country = 'us' if market_name != 'KRX' else 'kr'
+                        country = 'kr' if market_name in ['KRX', 'ETF/KR'] else 'us'
                         
                         print(f"인터넷에서 종목을 찾았습니다: 코드='{code}', 이름='{name}', 국가='{country}', 마켓='{market_name}'")
                         
